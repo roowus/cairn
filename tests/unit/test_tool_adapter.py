@@ -7,6 +7,8 @@ captured in the graph. No real LLM or network is used.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic_ai.models.test import TestModel
 
@@ -121,6 +123,87 @@ def test_apply_signature_does_not_leak_runcontext():
     names = list(inspect.signature(_cmd).parameters)
     assert "rctx" not in names, "RunContext leaked into the shared CLI signature"
     assert "target" in names  # input-model field is mirrored
+
+
+def test_apply_signature_materializes_default_factory():
+    """``Field(default_factory=...)`` must stay optional in CLI + agent schemas.
+
+    Pydantic v2 leaves ``finfo.default`` as ``PydanticUndefined`` when only a
+    factory is set. Without materializing it, Typer marks the arg required and
+    PydanticAI puts it in JSON-schema ``required`` (username_check platforms).
+    """
+    import inspect
+
+    from pydantic import Field
+    from pydantic_ai import Agent, RunContext
+    from pydantic_ai.models.test import TestModel
+
+    from cairn.execution.base import PluginInput
+    from cairn.orchestration.tool_adapter import _apply_signature, _prepend_runctx
+
+    class _In(PluginInput):
+        tags: list[str] = Field(default_factory=list)
+        platforms: list[str] = Field(default_factory=lambda: ["instagram", "github"])
+        limit: int = 15
+
+    def _cmd(**kwargs):  # type: ignore[no-untyped-def]
+        pass
+
+    _apply_signature(_cmd, _In, "factory_plugin", "doc")
+    sig = inspect.signature(_cmd)
+    assert sig.parameters["target"].default is inspect.Parameter.empty
+    assert sig.parameters["tags"].default == []
+    assert sig.parameters["platforms"].default == ["instagram", "github"]
+    assert sig.parameters["limit"].default == 15
+
+    # Agent tool schema must only require ``target``.
+    async def _tool(rctx: RunContext[None], **kwargs: Any) -> str:
+        _ = rctx, kwargs
+        return "ok"
+
+    _apply_signature(_tool, _In, "factory_plugin", "doc")
+    _prepend_runctx(_tool)
+    agent = Agent(TestModel(), tools=[_tool])
+    tool = next(iter(agent._function_toolset.tools.values()))
+    schema = tool.function_schema.json_schema
+    assert schema["required"] == ["target"]
+    assert "platforms" in schema["properties"]
+    assert "tags" in schema["properties"]
+
+
+def test_apply_signature_username_check_platforms_optional():
+    """Concrete plugin regression: username_check.platforms uses default_factory."""
+    import inspect
+
+    from cairn.execution.social_probe import DEFAULT_PLATFORMS
+    from cairn.orchestration.tool_adapter import _apply_signature
+    from cairn.plugins.identity.username_check import UsernameCheckInput
+
+    def _cmd(**kwargs):  # type: ignore[no-untyped-def]
+        pass
+
+    _apply_signature(_cmd, UsernameCheckInput, "username_check", "doc")
+    sig = inspect.signature(_cmd)
+    assert sig.parameters["target"].default is inspect.Parameter.empty
+    assert sig.parameters["platforms"].default == list(DEFAULT_PLATFORMS)
+
+
+def test_plugin_cli_username_check_platforms_not_required():
+    """CLI help must not mark ``platforms`` as a required argument."""
+    from typer.main import get_command
+
+    from cairn.interfaces.plugin_cli import build_plugin_cli
+
+    cmd = get_command(build_plugin_cli())
+    # Click command tree: root → username-check
+    uc = cmd.commands["username-check"]
+    params = {p.name: p for p in uc.params}
+    assert "target" in params
+    assert params["target"].required is True
+    # platforms is either absent-as-required or optional with a default
+    platforms = params.get("platforms")
+    assert platforms is not None
+    assert platforms.required is False, "platforms must not be a required CLI arg"
 
 
 def test_plugin_cli_builds_click_command_group():
