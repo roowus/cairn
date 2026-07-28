@@ -27,12 +27,36 @@ def _looks_like_ip(target: str) -> bool:
     return len(parts) == 4 and all(p.isdigit() for p in parts)
 
 
-def _query(target: str) -> str:
+def _normalize_host(target: str) -> str:
     t = target.strip()
     if "://" in t:
         t = t.split("://", 1)[1]
     t = t.split("/")[0]
+    # drop trailing dots / ports for domain targets (IPs never have ports here)
+    if not _looks_like_ip(t) and ":" in t:
+        t = t.rsplit(":", 1)[0]
+    return t.rstrip(".").lower()
+
+
+def _query(target: str) -> str:
+    t = _normalize_host(target)
     return f"ip:{t}" if _looks_like_ip(t) else f"domain:{t}"
+
+
+def _on_target_domain(domain: str | None, target: str) -> bool:
+    """True when ``domain`` is the target or a subdomain of it."""
+    if not domain:
+        return False
+    d = domain.lower().rstrip(".")
+    t = _normalize_host(target)
+    return d == t or d.endswith("." + t)
+
+
+def _on_target_hit(page_domain: str | None, page_ip: str | None, target: str) -> bool:
+    t = _normalize_host(target)
+    if _looks_like_ip(t):
+        return (page_ip or "").strip() == t
+    return _on_target_domain(page_domain, t)
 
 
 class UrlscanInput(PluginInput):
@@ -99,22 +123,35 @@ class UrlscanPlugin(BasePlugin[UrlscanInput, UrlscanOutput]):
             )
         r.raise_for_status()
         data = r.json()
+        raw_total = int(data.get("total") or 0)
         hits: list[UrlscanHit] = []
+        seen_urls: set[str] = set()
         for res in data.get("results", []) or []:
             page = res.get("page", {}) or {}
             task = res.get("task", {}) or {}
+            page_domain = page.get("domain")
+            page_ip = page.get("ip")
+            if not _on_target_hit(page_domain, page_ip, inp.target):
+                continue
+            page_url = page.get("url")
+            dedupe_key = (page_url or "").rstrip("/") or f"{page_domain}|{page_ip}"
+            if dedupe_key in seen_urls:
+                continue
+            seen_urls.add(dedupe_key)
             hits.append(
                 UrlscanHit(
-                    page_url=page.get("url"),
-                    page_domain=page.get("domain"),
-                    page_ip=page.get("ip"),
+                    page_url=page_url,
+                    page_domain=page_domain,
+                    page_ip=page_ip,
                     page_title=page.get("title"),
                     server=page.get("server"),
                     task_url=task.get("url"),
                 )
             )
+            if len(hits) >= inp.limit:
+                break
 
-        out = UrlscanOutput(source=self.name, total=data.get("total", len(hits)), hits=hits)
+        out = UrlscanOutput(source=self.name, total=raw_total, hits=hits)
         out.summary_markdown = _summary(out, inp.target)
         out.entities = _entities(out, inp.target)
         return out
@@ -122,8 +159,19 @@ class UrlscanPlugin(BasePlugin[UrlscanInput, UrlscanOutput]):
 
 def _summary(out: UrlscanOutput, target: str) -> str:
     if not out.hits:
+        if out.total:
+            return (
+                f"**{target}** — urlscan: {out.total} raw hit(s) but none on-target "
+                f"after domain/IP filter."
+            )
         return f"**{target}** — urlscan: no public scans found."
-    lines = [f"**{target}** — urlscan: {out.total} scan(s); showing {len(out.hits)}:"]
+    # urlscan's ``total`` is the unfiltered index count and is often inflated /
+    # off-domain noise for ``domain:`` queries — only claim on-target hits.
+    lines = [
+        f"**{target}** — urlscan: {len(out.hits)} on-target scan(s)"
+        + (f" (of {out.total} raw)" if out.total and out.total != len(out.hits) else "")
+        + ":"
+    ]
     for h in out.hits:
         title = f"“{h.page_title}”" if h.page_title else "(no title)"
         lines.append(

@@ -29,7 +29,41 @@ async def test_crtsh_extracts_subdomains():
 
 
 @respx.mock
-async def test_crtsh_empty_response():
+async def test_crtsh_empty_body_is_zero_subdomains_not_unavailable():
     respx.get("https://crt.sh/").mock(return_value=httpx.Response(200, text=""))
     out = await CrtshPlugin().run(CrtshInput(target="nodomain.xyz"), PluginContext(http=None))
     assert out.subdomains == []
+    assert "0 subdomains" in out.summary_markdown
+    assert "unavailable" not in out.summary_markdown
+
+
+@respx.mock
+async def test_crtsh_empty_list_is_zero_subdomains():
+    respx.get("https://crt.sh/").mock(return_value=httpx.Response(200, json=[]))
+    out = await CrtshPlugin().run(CrtshInput(target="nodomain.xyz"), PluginContext(http=None))
+    assert out.subdomains == []
+    assert "0 subdomains" in out.summary_markdown
+
+
+@respx.mock
+async def test_crtsh_http_error_surfaces_status():
+    respx.get("https://crt.sh/").mock(return_value=httpx.Response(503, text="busy"))
+    out = await CrtshPlugin().run(CrtshInput(target="example.com"), PluginContext(http=None))
+    assert out.subdomains == []
+    assert "HTTP 503" in out.summary_markdown
+
+
+@respx.mock
+async def test_crtsh_timeout_is_honest():
+    respx.get("https://crt.sh/").mock(side_effect=httpx.ReadTimeout("slow"))
+    out = await CrtshPlugin().run(CrtshInput(target="example.com"), PluginContext(http=None))
+    assert out.subdomains == []
+    assert "unreachable" in out.summary_markdown
+    assert "ReadTimeout" in out.summary_markdown
+
+
+@respx.mock
+async def test_crtsh_invalid_json_surfaces_error():
+    respx.get("https://crt.sh/").mock(return_value=httpx.Response(200, text="<html>nope</html>"))
+    out = await CrtshPlugin().run(CrtshInput(target="example.com"), PluginContext(http=None))
+    assert "not valid JSON" in out.summary_markdown
