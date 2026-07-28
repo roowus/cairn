@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 # Tags that delimit untrusted content handed back to the model. See
 # docs/architecture/security.md — the system prompt instructs the model to treat
@@ -63,6 +64,33 @@ def redact_text(text: str) -> str:
             redacted,
         )
     return redacted
+
+
+def redact_url_userinfo(url: str) -> str:
+    """Drop embedded credentials (``user:pass@host``) from a URL.
+
+    Wayback CDX and other archives often return historical URLs with HTTP
+    basic-auth userinfo. Those must not reach model summaries, entity graphs,
+    or CLI output as pivot fuel. Non-URL strings and URLs without userinfo are
+    returned unchanged.
+    """
+    if not url or "@" not in url:
+        return url
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return url
+    if parsed.username is None and parsed.password is None:
+        return url
+    host = parsed.hostname or ""
+    if ":" in host and not host.startswith("["):
+        # IPv6 literals need brackets in netloc.
+        host = f"[{host}]"
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return urlunparse(
+        (parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment)
+    )
 
 
 def redact_secrets(value: Any) -> Any:

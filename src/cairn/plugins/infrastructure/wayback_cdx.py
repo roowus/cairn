@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 from pydantic import Field
 
+from cairn.core.security import redact_url_userinfo
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 
 
@@ -62,6 +63,11 @@ class WaybackCdxPlugin(BasePlugin[WaybackCdxInput, WaybackCdxOutput]):
             )
         header, rows = data[0], data[1:]
         snaps = [dict(zip(header, row, strict=False)) for row in rows]
+        # Drop historical basic-auth userinfo before it reaches summaries / model.
+        for s in snaps:
+            original = s.get("original")
+            if isinstance(original, str):
+                s["original"] = redact_url_userinfo(original)
         timestamps = [s["timestamp"] for s in snaps if s.get("timestamp")]
         preview = "\n".join(f"  - {s.get('timestamp')} {s.get('original')}" for s in snaps[:8])
         extra = f"\n  ...(+{len(snaps) - 8} more)" if len(snaps) > 8 else ""

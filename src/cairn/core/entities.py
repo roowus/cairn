@@ -16,6 +16,8 @@ import ipaddress
 import re
 from dataclasses import dataclass
 
+from cairn.core.security import redact_url_userinfo
+
 _EMAIL = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
 _URL = re.compile(r"https?://[^\s<>\"')]+")
 _IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
@@ -58,10 +60,36 @@ def extract_entities(text: str, *, max_per_type: int = 50) -> list[ExtractedEnti
         seen.add(key)
         found.append(ExtractedEntity(etype, val))
 
-    for m in _EMAIL.finditer(text):
-        _add("email", m.group(0))
+    # URLs first so we can (a) skip emails that are only URL userinfo and
+    # (b) store credential-stripped URL values in the entity graph.
+    url_spans: list[tuple[int, int]] = []
     for m in _URL.finditer(text):
-        _add("url", m.group(0))
+        url_spans.append(m.span())
+        _add("url", redact_url_userinfo(m.group(0)))
+
+    def _email_in_url(span: tuple[int, int]) -> bool:
+        start, end = span
+        return any(u_start <= start and end <= u_end for u_start, u_end in url_spans)
+
+    def _looks_like_userinfo(match: re.Match[str]) -> bool:
+        # Free-text ``user:pass@host`` (no scheme) — the email regex only grabs
+        # ``pass@host``; a username+colon immediately before is credential-shaped.
+        # Exclude URI schemes (``mailto:``, ``http:``, …) so real addresses keep.
+        start = match.start()
+        if start == 0 or text[start - 1] != ":":
+            return False
+        j = start - 2
+        while j >= 0 and (text[j].isalnum() or text[j] in "._-+"):
+            j -= 1
+        user = text[j + 1 : start - 1]
+        if not user:
+            return False
+        return user.lower() not in {"mailto", "http", "https", "ftp", "file", "ssh", "git"}
+
+    for m in _EMAIL.finditer(text):
+        if _email_in_url(m.span()) or _looks_like_userinfo(m):
+            continue
+        _add("email", m.group(0))
     for m in _IPV4.finditer(text):
         try:
             ipaddress.ip_address(m.group(0))

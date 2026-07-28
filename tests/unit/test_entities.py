@@ -43,3 +43,40 @@ def test_invalid_ip_not_captured():
 def test_bare_domain_captured_when_not_in_email_or_url():
     tv = _types_values("the site sub.example.org has data")
     assert "sub.example.org" in tv["domain"]
+
+
+def test_url_userinfo_is_not_mined_as_email():
+    """Credentialed URLs must not invent pass@host emails (issue #10)."""
+    from cairn.core.entities import extract_entities
+
+    ents = extract_entities("http://user:pass@example.com/")
+    emails = [e.value for e in ents if e.type == "email"]
+    urls = [e.value for e in ents if e.type == "url"]
+    assert emails == []
+    assert urls == ["http://example.com/"]
+
+
+def test_https_userinfo_stripped_from_url_entity():
+    from cairn.core.entities import extract_entities
+
+    ents = extract_entities("see https://alice:secret@host.example/path?x=1")
+    assert [e.value for e in ents if e.type == "email"] == []
+    assert [e.value for e in ents if e.type == "url"] == [
+        "https://host.example/path?x=1"
+    ]
+
+
+def test_free_text_userinfo_shape_not_email():
+    """``user:pass@host`` without a scheme is still credential-shaped."""
+    tv = _types_values("Contact user:pass@example.com for access")
+    assert "pass@example.com" not in tv.get("email", set())
+
+
+def test_real_email_still_extracted():
+    tv = _types_values("write to alice@example.com please")
+    assert "alice@example.com" in tv["email"]
+
+
+def test_mailto_scheme_still_yields_email():
+    tv = _types_values("mailto:alice@example.com")
+    assert "alice@example.com" in tv["email"]
