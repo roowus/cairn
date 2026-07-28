@@ -1,12 +1,17 @@
 # UI Overhaul — Phases 4–6 Implementation Plan
 
+> **⚠ Superseded (2026-07-28):** the active UI overhaul is now U1–U6 (zoned
+> chrome ✅, prompt_toolkit input ✅, U3–U6 next — see `roadmap.md`).
+> `backburner.md` is removed (moat → `strategy.md`, backlog → [GitHub issues](https://github.com/roowus/cairn/issues)).
+> This doc is kept for historical design detail.
+
 > **Status:** Plan **verified against code** (2026-07-28) — all four
 > load-bearing claims check out, including the latent dead-code bug
 > (`progress._status` in sherlock/holehe; no subclass sets it — Phase 5.4
 > deletes it). **B1 shipped:** `src/cairn/interfaces/tui/theme.py` +
 > `tests/unit/test_theme.py` (187 tests, ruff clean). Otherwise PLANNING ONLY —
 > no further source modified. Derived from the verbatim
-> Phase 4–6 spec in [`backburner.md`](backburner.md) § "Deferred — UI overhaul
+> Phase 4–6 spec (originally in `backburner.md`, since removed) § "Deferred — UI overhaul
 > Phases 4–6", re-grounded against the **current** tree (re-read July 2026;
 > **187 tests**, `ruff` clean). Phases 1–3 (stream + tool cards + statusline) and
 > the Phase-4-agentic subset (`/workspace` command + `RichPermissionUI` seam)

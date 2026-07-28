@@ -6,10 +6,11 @@ accept/deny prompt implementing the
 :class:`~cairn.execution.workspace.PermissionUI` protocol.
 
 It is **not wired into the live turn yet.** Prompting during a streaming Rich
-``Live`` region must wait for the prompt_toolkit input work (parked — see
-``docs/backburner.md`` "Deferred — UI overhaul Phases 4-6") so we never run
-``Live`` and interactive input concurrently. Until then it is exercised in
-isolation by ``tests/unit/test_workspace_ui.py``; v1's auto-allow-in-workspace /
+``Live`` region is a separate, unmade decision — prompt_toolkit input shipped in
+the UI overhaul's U2, but wiring an accept/deny panel into the live turn needs
+its own terminal-ownership design so we never run ``Live`` and interactive input
+concurrently. Until then it is exercised in isolation by
+``tests/unit/test_workspace_ui.py``; v1's auto-allow-in-workspace /
 deny-outside policy needs no UI.
 """
 

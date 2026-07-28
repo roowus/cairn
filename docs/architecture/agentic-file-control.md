@@ -52,7 +52,7 @@ defenses that *do* hold:
   prompt-injection, the bytes reach the model only as wrapped observation.
 
 OS-level sandboxing (firejail / bubblewrap / container) is flagged
-**future-hardening** (see [backburner.md](../backburner.md)). The system prompt
+**future-hardening** (tracked in [GitHub issues](https://github.com/roowus/cairn/issues)). The system prompt
 and the [security model](security.md) state this explicitly.
 
 ## The workspace

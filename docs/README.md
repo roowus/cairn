@@ -12,7 +12,8 @@
 - **[Discoveries](discoveries.md)** — engineering notes: providers, PydanticAI, free-first, hard-stop, pi-auth, social probes, CLI auto-install.
 - **[Plugin Reference](plugin-reference.md)** — every plugin (cost, target, purpose, entities).
 - **[Roadmap](roadmap.md)** — what's next: cookie social channels, reverse image, video, MCP.
-- **[Backburner & ideas](backburner.md)** — parking lot of deferred/uncommitted ideas (native LLM web search, free people/DB sources) below the committed roadmap.
+- **[Strategy — the moat](strategy.md)** — the product thesis (4 pillars): why Cairn isn't just "Claude Code + OSINT MCPs".
+- **Backlog** is [GitHub issues](https://github.com/roowus/cairn/issues) (`enhancement` / `bug` / `priority` / `moat` / `decision-needed`), not a doc.
 
 ## Architecture
 
