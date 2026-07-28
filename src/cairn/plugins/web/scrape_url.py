@@ -22,6 +22,7 @@ from pydantic import Field
 
 from cairn.core.entities import extract_entities
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
+from cairn.execution.http_util import http_client
 
 try:  # optional JS-rendering backend (open-source, free)
     from crawl4ai import AsyncWebCrawler  # type: ignore[import-not-found]
@@ -69,17 +70,15 @@ class ScrapeUrlPlugin(BasePlugin[ScrapeUrlInput, ScrapeUrlOutput]):
         url = inp.target.strip()
         if not url.startswith(("http://", "https://")):
             url = f"https://{url}"
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        if _HAS_CRAWL4AI and inp.render_js:
-            try:
-                out = await _crawl4ai(url, ctx)
-                if out is not None:
-                    return out
-            except Exception:  # pragma: no cover - fall back to static fetch
-                pass
-        return await _static(http, url, ctx)
+        async with http_client(ctx) as http:
+            if _HAS_CRAWL4AI and inp.render_js:
+                try:
+                    out = await _crawl4ai(url, ctx)
+                    if out is not None:
+                        return out
+                except Exception:  # pragma: no cover - fall back to static fetch
+                    pass
+            return await _static(http, url, ctx)
 
 
 async def _crawl4ai(url: str, ctx: PluginContext) -> ScrapeUrlOutput | None:  # pragma: no cover

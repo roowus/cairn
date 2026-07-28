@@ -27,6 +27,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 _YT = re.compile(
     r"(?:youtube\.com/embed/|youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{6,})",
@@ -139,113 +140,111 @@ class GithubPlugin(BasePlugin[GithubInput, GithubOutput]):
 
     async def run(self, inp: GithubInput, ctx: PluginContext) -> GithubOutput:
         login = _normalize_login(inp.target)
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        headers = {"Accept": "application/vnd.github+json", "User-Agent": ctx.user_agent}
-        token = ctx.key("github")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        async with http_client(ctx) as http:
+            headers = {"Accept": "application/vnd.github+json", "User-Agent": ctx.user_agent}
+            token = ctx.key("github")
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
 
-        r = await http.get(f"https://api.github.com/users/{login}", headers=headers)
-        if r.status_code == 404:
-            return GithubOutput(
-                source=self.name,
-                summary_markdown=f"**{inp.target}** — GitHub: no such user/org (`{login}`).",
-                entities=[Entity(type="github_login", value=login)],
-            )
-        if r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0":
-            return GithubOutput(
-                source=self.name,
-                summary_markdown=(
-                    f"**{inp.target}** — GitHub rate limit hit (60/hr unauthenticated). "
-                    "Set CAIRN_GITHUB_KEY to a personal access token for 5,000/hr."
-                ),
-                entities=[Entity(type="github_login", value=login)],
-            )
-        r.raise_for_status()
-        u = r.json()
+            r = await http.get(f"https://api.github.com/users/{login}", headers=headers)
+            if r.status_code == 404:
+                return GithubOutput(
+                    source=self.name,
+                    summary_markdown=f"**{inp.target}** — GitHub: no such user/org (`{login}`).",
+                    entities=[Entity(type="github_login", value=login)],
+                )
+            if r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0":
+                return GithubOutput(
+                    source=self.name,
+                    summary_markdown=(
+                        f"**{inp.target}** — GitHub rate limit hit (60/hr unauthenticated). "
+                        "Set CAIRN_GITHUB_KEY to a personal access token for 5,000/hr."
+                    ),
+                    entities=[Entity(type="github_login", value=login)],
+                )
+            r.raise_for_status()
+            u = r.json()
 
-        repos: list[GithubRepo] = []
-        raw_repos: list[dict] = []
-        if inp.include_repos:
-            rr = await http.get(
-                f"https://api.github.com/users/{login}/repos",
-                params={
-                    "sort": "updated",
-                    "per_page": min(max(inp.repo_limit, 1), 100),
-                    "type": "owner",
-                },
-                headers=headers,
-            )
-            if rr.status_code == 200 and isinstance(rr.json(), list):
-                raw_repos = rr.json()
-                for repo in raw_repos:
-                    repos.append(
-                        GithubRepo(
-                            name=repo.get("name", ""),
-                            full_name=repo.get("full_name", ""),
-                            stars=repo.get("stargazers_count", 0),
-                            language=repo.get("language"),
-                            url=repo.get("html_url", ""),
-                            description=repo.get("description"),
-                            updated=repo.get("updated_at"),
-                            default_branch=repo.get("default_branch"),
+            repos: list[GithubRepo] = []
+            raw_repos: list[dict] = []
+            if inp.include_repos:
+                rr = await http.get(
+                    f"https://api.github.com/users/{login}/repos",
+                    params={
+                        "sort": "updated",
+                        "per_page": min(max(inp.repo_limit, 1), 100),
+                        "type": "owner",
+                    },
+                    headers=headers,
+                )
+                if rr.status_code == 200 and isinstance(rr.json(), list):
+                    raw_repos = rr.json()
+                    for repo in raw_repos:
+                        repos.append(
+                            GithubRepo(
+                                name=repo.get("name", ""),
+                                full_name=repo.get("full_name", ""),
+                                stars=repo.get("stargazers_count", 0),
+                                language=repo.get("language"),
+                                url=repo.get("html_url", ""),
+                                description=repo.get("description"),
+                                updated=repo.get("updated_at"),
+                                default_branch=repo.get("default_branch"),
+                            )
                         )
-                    )
 
-        email_counts: Counter[str] = Counter()
-        name_counts: Counter[str] = Counter()
-        youtube: list[str] = []
-        mine_note = ""
+            email_counts: Counter[str] = Counter()
+            name_counts: Counter[str] = Counter()
+            youtube: list[str] = []
+            mine_note = ""
 
-        if inp.mine_commit_emails and raw_repos:
-            mine_note = await _mine_commit_identity(
-                http,
-                headers,
-                login=login,
-                profile_name=(u.get("name") or "") or "",
-                repos=raw_repos[: inp.commit_scan_repos],
-                commits_per_branch=inp.commits_per_branch,
-                email_counts=email_counts,
-                name_counts=name_counts,
-                youtube=youtube,
+            if inp.mine_commit_emails and raw_repos:
+                mine_note = await _mine_commit_identity(
+                    http,
+                    headers,
+                    login=login,
+                    profile_name=(u.get("name") or "") or "",
+                    repos=raw_repos[: inp.commit_scan_repos],
+                    commits_per_branch=inp.commits_per_branch,
+                    email_counts=email_counts,
+                    name_counts=name_counts,
+                    youtube=youtube,
+                )
+
+            profile_email = u.get("email")
+            commit_emails = [e for e, _ in email_counts.most_common()]
+            # Prefer putting a non-noreply real email first in the summary.
+            ranked = _rank_emails(profile_email, commit_emails)
+
+            out = GithubOutput(
+                source=self.name,
+                login=u.get("login"),
+                name=u.get("name"),
+                type=u.get("type"),
+                company=u.get("company"),
+                blog=u.get("blog"),
+                location=u.get("location"),
+                email=profile_email,
+                bio=u.get("bio"),
+                twitter_username=u.get("twitter_username"),
+                avatar_url=u.get("avatar_url"),
+                public_repos=u.get("public_repos"),
+                public_gists=u.get("public_gists"),
+                followers=u.get("followers"),
+                following=u.get("following"),
+                created_at=u.get("created_at"),
+                updated_at=u.get("updated_at"),
+                html_url=u.get("html_url"),
+                repos=repos,
+                commit_emails=ranked,
+                commit_names=[n for n, _ in name_counts.most_common()],
+                youtube_ids=sorted(set(youtube)),
             )
 
-        profile_email = u.get("email")
-        commit_emails = [e for e, _ in email_counts.most_common()]
-        # Prefer putting a non-noreply real email first in the summary.
-        ranked = _rank_emails(profile_email, commit_emails)
-
-        out = GithubOutput(
-            source=self.name,
-            login=u.get("login"),
-            name=u.get("name"),
-            type=u.get("type"),
-            company=u.get("company"),
-            blog=u.get("blog"),
-            location=u.get("location"),
-            email=profile_email,
-            bio=u.get("bio"),
-            twitter_username=u.get("twitter_username"),
-            avatar_url=u.get("avatar_url"),
-            public_repos=u.get("public_repos"),
-            public_gists=u.get("public_gists"),
-            followers=u.get("followers"),
-            following=u.get("following"),
-            created_at=u.get("created_at"),
-            updated_at=u.get("updated_at"),
-            html_url=u.get("html_url"),
-            repos=repos,
-            commit_emails=ranked,
-            commit_names=[n for n, _ in name_counts.most_common()],
-            youtube_ids=sorted(set(youtube)),
-        )
-
-        out.summary_markdown = _summary(out, inp.target, mine_note=mine_note)
-        out.entities = _entities(out)
-        _capture_rate_limit(out, r)
-        return out
+            out.summary_markdown = _summary(out, inp.target, mine_note=mine_note)
+            out.entities = _entities(out)
+            _capture_rate_limit(out, r)
+            return out
 
 
 def _rank_emails(profile: str | None, mined: list[str]) -> list[str]:

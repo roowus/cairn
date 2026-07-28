@@ -17,8 +17,8 @@ from urllib.parse import urlparse
 from pydantic import Field
 
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
-from cairn.execution.browser_http import make_browser_client
 from cairn.execution.cli_tools import run_cli_tool
+from cairn.execution.http_util import http_client
 from cairn.execution.social_probe import DEFAULT_PLATFORMS, probe_many
 from cairn.execution.subprocess_util import SubprocessError
 from cairn.execution.tool_progress import progress_for
@@ -123,17 +123,8 @@ class SherlockPlugin(BasePlugin[SherlockInput, SherlockOutput]):
         fp_found: list[str] = []
         fp_entities: list[Entity] = []
         if inp.crosscheck_major:
-            owns = ctx.http is None
-            http = ctx.http or make_browser_client(
-                timeout=max(ctx.timeout, 30.0),
-                proxy=ctx.proxy,
-                user_agent=ctx.user_agent if "Mozilla" in (ctx.user_agent or "") else None,
-            )
-            try:
+            async with http_client(ctx, timeout=max(ctx.timeout, 30.0)) as http:
                 results = await probe_many(http, inp.target, DEFAULT_PLATFORMS)
-            finally:
-                if owns:
-                    await http.aclose()
 
             # If first-party says not_found, drop Sherlock URLs for that platform.
             deny_platforms = {r.platform for r in results if r.status == "not_found"}

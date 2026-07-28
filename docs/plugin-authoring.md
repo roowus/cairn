@@ -18,21 +18,24 @@ in the CLI and the agent tool schema — `_apply_signature` materializes
 
 ## 2. Implement `run()`
 
-Edit the generated file. Use `ctx.http` (an injected `httpx.AsyncClient`) for
-HTTP, or `ctx.key("logical")` for an API key. Always return a
-`PluginOutput` with a concise `summary_markdown` and any `entities`.
+Edit the generated file. Use the shared `http_client(ctx)` helper for HTTP (it
+reuses the injected browser-like client, or builds and closes a temporary one),
+or `ctx.key("logical")` for an API key. Always return a `PluginOutput` with a
+concise `summary_markdown` and any `entities`.
 
 ```python
+from cairn.execution.http_util import http_client
+
 async def run(self, inp, ctx):
-    http = ctx.http or httpx.AsyncClient(timeout=ctx.timeout, proxy=ctx.proxy)
-    r = await http.get(f"https://example.test/{inp.target}", headers={"User-Agent": ctx.user_agent})
-    r.raise_for_status()
-    data = r.json()
-    return MyOutput(
-        source="my_lookup",
-        summary_markdown=f"**{inp.target}** — found {len(data)} records.",
-        entities=[Entity(type="thing", value=inp.target)],
-    )
+    async with http_client(ctx) as http:
+        r = await http.get(f"https://example.test/{inp.target}")
+        r.raise_for_status()
+        data = r.json()
+        return MyOutput(
+            source="my_lookup",
+            summary_markdown=f"**{inp.target}** — found {len(data)} records.",
+            entities=[Entity(type="thing", value=inp.target)],
+        )
 ```
 
 ## 3. Shelling out (anti command-injection)

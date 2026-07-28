@@ -17,6 +17,8 @@ from typing import Any, ClassVar
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from cairn.execution.browser_http import DEFAULT_BROWSER_UA
+
 
 @dataclass(frozen=True)
 class CostSpec:
@@ -44,7 +46,9 @@ class PluginContext(BaseModel):
 
     timeout: float = 30.0
     proxy: str | None = None
-    user_agent: str = "cairn/0.1"
+    # Match production runner defaults; bare ``PluginContext()`` must not advertise
+    # a bot-only UA when plugins fall back to a temporary client.
+    user_agent: str = DEFAULT_BROWSER_UA
     # logical key name -> secret; populated from Settings. Never sent to the LLM.
     keys: dict[str, SecretStr] = Field(default_factory=dict)
     http: httpx.AsyncClient | None = None  # injected so tests can use respx

@@ -272,7 +272,7 @@ so entities are ambient — the brain doesn't spend a turn extracting. The
 
 ## Verified state (as of this writing)
 
-- **22+ plugins** including `username_check`, `install_cli`, identity/infra/web/paid.
+- **28 plugins** including `username_check`, `install_cli`, identity/infra/web/paid/agentic.
 - Unit suite: config, pi-auth, model catalog, build_model, cli_tools, interrupt,
   browser_http, social_probe, github commit mining, tool adapter, layering, …
 - Global install: `make install-global` → `cairn` on `PATH`.

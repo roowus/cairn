@@ -37,6 +37,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 _BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
@@ -76,19 +77,17 @@ class WebSearchPlugin(BasePlugin[WebSearchInput, WebSearchOutput]):
     )
 
     async def run(self, inp: WebSearchInput, ctx: PluginContext) -> WebSearchOutput:
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        brave = ctx.key("brave")
-        if brave:
-            results, backend = await _brave(http, inp.target, inp.limit, brave, ctx)
-        else:
-            results, backend = await _ddg(http, inp.target, inp.limit, ctx)
+        async with http_client(ctx) as http:
+            brave = ctx.key("brave")
+            if brave:
+                results, backend = await _brave(http, inp.target, inp.limit, brave, ctx)
+            else:
+                results, backend = await _ddg(http, inp.target, inp.limit, ctx)
 
-        out = WebSearchOutput(source=self.name, backend=backend, results=results)
-        out.summary_markdown = _summary(inp.target, out)
-        out.entities = _entities(results)
-        return out
+            out = WebSearchOutput(source=self.name, backend=backend, results=results)
+            out.summary_markdown = _summary(inp.target, out)
+            out.entities = _entities(results)
+            return out
 
 
 async def _ddg(

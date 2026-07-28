@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 from pydantic import Field
 
 from cairn.execution.base import (
@@ -18,6 +17,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 
 class CensysInput(PluginInput):
@@ -46,26 +46,24 @@ class CensysPlugin(BasePlugin[CensysInput, CensysOutput]):
     async def run(self, inp: CensysInput, ctx: PluginContext) -> CensysOutput:
         raw = ctx.key("censys") or ""
         api_id, _, secret = raw.partition(":")
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        r = await http.get(
-            f"https://search.censys.io/api/v2/hosts/{inp.target}",
-            auth=(api_id, secret),
-        )
-        if r.status_code == 404:
+        async with http_client(ctx) as http:
+            r = await http.get(
+                f"https://search.censys.io/api/v2/hosts/{inp.target}",
+                auth=(api_id, secret),
+            )
+            if r.status_code == 404:
+                return CensysOutput(
+                    source=self.name,
+                    summary_markdown=f"**{inp.target}** — Censys: no data.",
+                    entities=[Entity(type="ip", value=inp.target)],
+                )
+            r.raise_for_status()
+            result: dict[str, Any] = (r.json().get("result") or {}).get("services", [])
+            services = sorted({s.get("service_name", "?") for s in result if isinstance(s, dict)})
+            summary = f"**{inp.target}** — Censys\n- Services: {', '.join(services) or 'none'}\n"
             return CensysOutput(
                 source=self.name,
-                summary_markdown=f"**{inp.target}** — Censys: no data.",
+                summary_markdown=summary,
+                services=services,
                 entities=[Entity(type="ip", value=inp.target)],
             )
-        r.raise_for_status()
-        result: dict[str, Any] = (r.json().get("result") or {}).get("services", [])
-        services = sorted({s.get("service_name", "?") for s in result if isinstance(s, dict)})
-        summary = f"**{inp.target}** — Censys\n- Services: {', '.join(services) or 'none'}\n"
-        return CensysOutput(
-            source=self.name,
-            summary_markdown=summary,
-            services=services,
-            entities=[Entity(type="ip", value=inp.target)],
-        )

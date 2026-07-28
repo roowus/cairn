@@ -9,7 +9,6 @@ domain resolving to a given IP. Great free complement to ``crtsh`` and
 
 from __future__ import annotations
 
-import httpx
 from pydantic import Field
 
 from cairn.execution.base import (
@@ -20,6 +19,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 _BASE = "https://api.hackertarget.com"
 
@@ -74,27 +74,25 @@ class HackertargetPlugin(BasePlugin[HackertargetInput, HackertargetOutput]):
             "dnslookup": "dnslookup",
         }.get(query, "hostsearch")
 
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        r = await http.get(f"{_BASE}/{ep}/", params={"q": t})
-        r.raise_for_status()
-        text = r.text.strip()
+        async with http_client(ctx) as http:
+            r = await http.get(f"{_BASE}/{ep}/", params={"q": t})
+            r.raise_for_status()
+            text = r.text.strip()
 
-        out = HackertargetOutput(source=self.name, query=query)
-        low = text.lower()
-        if "api count exceeded" in low or "error" in low[:30].lower():
-            out.raw = text
-            out.quota_remaining = 0  # free daily quota (~50/day) exhausted
-            out.summary_markdown = (
-                f"**{t}** — hackertarget: {text.splitlines()[0] if text else 'no response'}"
-            )
+            out = HackertargetOutput(source=self.name, query=query)
+            low = text.lower()
+            if "api count exceeded" in low or "error" in low[:30].lower():
+                out.raw = text
+                out.quota_remaining = 0  # free daily quota (~50/day) exhausted
+                out.summary_markdown = (
+                    f"**{t}** — hackertarget: {text.splitlines()[0] if text else 'no response'}"
+                )
+                return out
+
+            out.host_records, out.hostnames, out.raw = _parse(query, text)
+            out.summary_markdown = _summary(out, t)
+            out.entities = _entities(out, t)
             return out
-
-        out.host_records, out.hostnames, out.raw = _parse(query, text)
-        out.summary_markdown = _summary(out, t)
-        out.entities = _entities(out, t)
-        return out
 
 
 def _parse(query: str, text: str) -> tuple[list[tuple[str, str]], list[str], str | None]:

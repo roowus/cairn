@@ -111,4 +111,4 @@ termination; the engine will make it deterministic.
 | Extract | ✅ `core/entities.py` (in-tool) | NER / username-across-platforms heuristic |
 | Pivot | 🟡 brain-driven | deterministic BFS engine + entity graph queries |
 | Image | ⏸ not built | reverse-image + face-match plugin (free-first) |
-| Social channels | ⏸ not built | Twitter/Reddit/Bilibili/YouTube via cookies (see [agent-reach analysis](../research/agent-reach-analysis.md)) |
+| Social channels | 🟡 tier A built | `username_check` + Sherlock first-party cross-check for major platforms; cookie/Playwright social channels still pending (see [agent-reach analysis](../research/agent-reach-analysis.md)) |
