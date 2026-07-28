@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cairn.core.security import redact_secrets, redact_text, wrap_untrusted
+from cairn.core.security import redact_secrets, redact_text, redact_url_userinfo, wrap_untrusted
 
 
 def test_wrap_untrusted_format():
@@ -56,3 +56,19 @@ def test_redact_secrets_dict():
     assert out["target"] == "8.8.8.8"
     assert out["api_key"] == "[REDACTED]"
     assert out["nested"]["token"] == "[REDACTED]"
+
+
+def test_redact_url_userinfo_strips_credentials():
+    assert (
+        redact_url_userinfo("http://user:pass@example.com/") == "http://example.com/"
+    )
+    assert (
+        redact_url_userinfo("https://alice:secret@host.example:8443/path?q=1#f")
+        == "https://host.example:8443/path?q=1#f"
+    )
+
+
+def test_redact_url_userinfo_leaves_clean_urls_alone():
+    assert redact_url_userinfo("https://example.com/a") == "https://example.com/a"
+    assert redact_url_userinfo("not a url") == "not a url"
+    assert redact_url_userinfo("") == ""
