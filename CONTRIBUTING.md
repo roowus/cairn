@@ -49,6 +49,26 @@ auto-discovered.
    installed via the allowlist in `execution/cli_tools.py`
    (`uv tool install <fixed package>`). Do not add a general `run_shell` tool.
 
-## Committing
+## Committing & pull requests
 
-Keep commits focused. The `uv.lock` is committed for reproducibility.
+**Commit messages** follow [Conventional Commits](https://www.conventionalcommits.org):
+`type(scope): summary` — e.g. `feat(tui): zoned turn chrome (U1)` or
+`fix(security): escape untrusted-data attributes`. Types: `feat`, `fix`, `refactor`,
+`docs`, `test`, `chore`, `perf`. Keep the subject ≤72 chars, imperative mood
+("add", not "added"). Scope is optional but encouraged (`tui`, `orchestration`,
+`execution`, `security`, `docs`, …).
+
+**Branches**: work on a branch off `main` named `<type>/<short-slug>`
+(e.g. `feat/tui-chrome`). Small, focused fixes may land directly on `main`;
+anything non-trivial goes through a PR.
+
+**Pull requests**: fill in the PR template (`.github/PULL_REQUEST_TEMPLATE.md`) —
+summary, type, the "rules that must not regress" checklist, and confirm `make test`
++ `make lint` pass. CI runs the same gates on every push and PR: `ruff check .`,
+`pytest -m "not network"`, and `mypy src` (non-blocking until types are complete).
+Network-dependent tests (`pytest -m network`, currently `tests/e2e/test_smoke_free.py`)
+are skipped in CI — run them locally against real free APIs when a plugin changes.
+
+Keep commits focused and atomic — one logical change each. The `uv.lock` is
+committed for reproducibility, so re-run `uv sync --extra dev` after pulling if
+deps changed.

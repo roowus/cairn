@@ -9,6 +9,54 @@
 
 ---
 
+## Multi-agent / parallel sessions on different tasks
+
+> **Priority: HIGH** (requested 2026-07-28). Today Cairn runs **one** agent in
+> **one** session, one turn at a time. Parallel *tool calls within a turn*
+> already work (PydanticAI); this is about parallel **agents / sessions** each
+> doing independent work at the same time. Major feature — not a quick add.
+
+### Goal
+
+Run N independent investigations concurrently — e.g. one session pivots on a
+domain while another enriches a person and a third triages a challenge pcap —
+with a shared audit/entity graph and a UI that shows all live turns. The brain(s)
+stay gated by the hard-stop; concurrency is about throughput and orchestration,
+**not** relaxing Layer B.
+
+### Design questions to resolve before building
+
+- **Process vs asyncio.** Separate `Session` objects on one event loop (cheap,
+  shared audit DB) vs subprocess workers (isolation, harder). v1 likely N async
+  `Session`s on the shared loop, each with its own `iter_turn`.
+- **Resource ceiling.** Bound concurrent turns (`max_concurrent_sessions`),
+  per-session token/spend budgets (reuse `UsageTracker`), and a fair scheduler so
+  one runaway session can't starve the others.
+- **UI.** The zoned-chrome turn frame (UI U1) is per-turn; parallel sessions need
+  a **laned** view (one card/column per live session) or tabbed switching
+  (`/sessions` is planned in UI U6 — promote it). Rich `Live` doesn't trivially
+  render N concurrent live regions; likely one `Live` region per session in a
+  `Columns`/layout, or serialized separate scrollback streams. Ties into the
+  deferred fullscreen/alt-screen question.
+- **Shared state.** A shared entity graph + audit log (already SQLite + NetworkX)
+  so sessions cross-pollinate findings — or strict isolation with an explicit
+  merge. Shared reads + per-session writes is the likely v1.
+- **Cancellation.** Generalize `interrupt.py`'s single-task cancel to "cancel
+  session X" / "cancel all" — the `tool_call_id` keying extends to a `session_id`.
+
+### Rough build order
+
+1. `Session` becomes cheaply instantiable N times on one loop; a `SessionPool`
+   schedules `iter_turn` calls under a concurrency cap.
+2. `/spawn <task>` REPL command starts a background session; `/sessions` lists
+   live ones (reuses UI U6's session store).
+3. Laned UI — one ToolCard-grouped region per live session.
+4. Shared-graph merge + cross-session entity de-dup.
+
+**Depends on:** UI U6 (session store / ids) and UI U1 (zoned frame, per-session view).
+
+---
+
 ## Strategic differentiation — beyond "Claude Code + OSINT MCPs" (the moat)
 
 > **Priority: HIGH — this is the thesis that decides whether Cairn is a product

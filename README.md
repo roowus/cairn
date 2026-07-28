@@ -1,5 +1,7 @@
 # Cairn
 
+[![CI](https://github.com/roowus/cairn/actions/workflows/ci.yml/badge.svg)](https://github.com/roowus/cairn/actions/workflows/ci.yml)
+
 > Terminal-native **agentic OSINT** assistant — like Claude Code, but for OSINT.
 
 You describe a target or investigation in plain English. An LLM — the **brain** —
