@@ -132,6 +132,27 @@ def _make_tool(
     return _tool
 
 
+def _field_default(finfo: Any) -> Any:
+    """Materialize a signature default from a Pydantic v2 ``FieldInfo``.
+
+    Required fields stay required (``inspect.Parameter.empty``). Optional fields
+    with a static ``default`` keep it. Optional fields declared with only
+    ``default_factory=...`` (``default is PydanticUndefined``) used to collapse
+    to *required* in the inspect signature — which made Typer mark them
+    required and PydanticAI put them in JSON-schema ``required``. Materialize
+    the factory once when it takes no validated data (the normal case for
+    plugin inputs like ``list`` / ``lambda: list(DEFAULT_PLATFORMS)``).
+    """
+    if finfo.is_required():
+        return inspect.Parameter.empty
+    if finfo.default is not PydanticUndefined:
+        return finfo.default
+    # default_factory present, or truly missing default (defensive).
+    if finfo.default_factory is not None and not finfo.default_factory_takes_validated_data:
+        return finfo.get_default(call_default_factory=True)
+    return inspect.Parameter.empty
+
+
 def _apply_signature(func: Any, input_model: type, name: str, doc: str) -> None:
     """Give ``func`` a signature mirroring ONLY the input model's fields.
 
@@ -142,21 +163,19 @@ def _apply_signature(func: Any, input_model: type, name: str, doc: str) -> None:
     :func:`_prepend_runctx`. (Leaking it here once made Typer reject every
     ``cairn plugin <name>`` command at startup with
     ``Type not yet supported: RunContext[NoneType]``.)
+
+    ``default_factory`` fields are materialized into concrete defaults so CLI
+    args and agent JSON schemas treat them as optional (see
+    :func:`_field_default`).
     """
     params: list[inspect.Parameter] = []
     for fname, finfo in input_model.model_fields.items():
-        if finfo.is_required():
-            default: Any = inspect.Parameter.empty
-        else:
-            default = (
-                finfo.default if finfo.default is not PydanticUndefined else inspect.Parameter.empty
-            )
         params.append(
             inspect.Parameter(
                 fname,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD,
                 annotation=finfo.annotation,
-                default=default,
+                default=_field_default(finfo),
             )
         )
     func.__signature__ = inspect.Signature(parameters=params)  # type: ignore[attr-defined]

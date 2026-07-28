@@ -11,6 +11,11 @@ The plugin's primary input field is `target` — it becomes a **positional** CLI
 argument (`cairn plugin my-lookup <target>`); any extra input fields become
 `--flags`.
 
+Optional extra fields may use either a static default (`limit: int = 15`) or
+`Field(default_factory=...)` (e.g. a mutable list). Both are treated as optional
+in the CLI and the agent tool schema — `_apply_signature` materializes
+`default_factory` so Typer / PydanticAI don't mark the field required.
+
 ## 2. Implement `run()`
 
 Edit the generated file. Use `ctx.http` (an injected `httpx.AsyncClient`) for
