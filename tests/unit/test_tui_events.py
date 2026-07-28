@@ -453,3 +453,44 @@ def test_tool_schema_excludes_runcontext_param(fake_settings, tmp_path):
     assert "rctx" not in props, "RunContext param leaked into the LLM tool schema"
     assert props, "expected at least the inherited 'target' field in the schema"
 
+
+# --- 5. U3: collapsed thinking + live stdout into cards ------------------------
+
+
+def test_composer_collapsed_thinking_renders_line_count():
+    """U3: ThinkingDelta events render a collapsed 'thinking ▸ (N lines)' line."""
+    from cairn.interfaces.tui.live_turn import _apply_event, _Composer
+    from cairn.orchestration.events import ThinkingDelta
+
+    session = SimpleNamespace(
+        model_name="m", settings=SimpleNamespace(mode="investigate")
+    )
+    composer = _Composer(session, chrome=True)
+    _apply_event(composer, ThinkingDelta(0, "first reasoning line"))
+    _apply_event(composer, ThinkingDelta(0, "second reasoning line"))
+
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=False, width=60, color_system=None).print(
+        composer.render()
+    )
+    rendered = buf.getvalue()
+    assert "thinking" in rendered
+    assert "2 lines" in rendered
+
+
+def test_composer_tool_progress_appends_streamed_stdout_to_card_body():
+    """U3: on_tool_progress lines land on the matching card's tail-capped body."""
+    from cairn.interfaces.tui.live_turn import _Composer
+
+    composer = _Composer(SimpleNamespace(model_name="m"))
+    composer.args_started("id1", "run_command")
+    composer.tool_started("id1", "run_command", "ls")
+    composer.tool_progress("id1", "file1.txt")
+    composer.tool_progress("id1", "file2.txt")
+
+    card = composer.cards["id1"]
+    assert card.body == ["file1.txt", "file2.txt"]
+    # unknown id is a harmless no-op (no card yet / wrong id)
+    composer.tool_progress("nope", "ignored")
+    assert card.body == ["file1.txt", "file2.txt"]
+

@@ -10,7 +10,6 @@ Holehe probes many sites and often needs well over the HTTP ``ctx.timeout``
 
 from __future__ import annotations
 
-import contextlib
 import re
 
 from pydantic import Field
@@ -18,6 +17,7 @@ from pydantic import Field
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 from cairn.execution.cli_tools import run_cli_tool
 from cairn.execution.subprocess_util import SubprocessError
+from cairn.execution.tool_progress import progress_for
 
 # holehe prints "[+] domain.tld …" for registered addresses only (--only-used).
 _FOUND = re.compile(r"^\[\+\]\s+(\S+)", re.MULTILINE)
@@ -55,13 +55,7 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
     async def run(self, inp: HoleheInput, ctx: PluginContext) -> HoleheOutput:
         overall = max(float(inp.overall_timeout), 60.0)
         progress = getattr(ctx, "progress", None)
-        status = getattr(progress, "_status", None) if progress is not None else None
-        if status is not None and hasattr(status, "update"):
-            with contextlib.suppress(Exception):
-                status.update(
-                    f"[cyan]holehe[/cyan]({inp.target})  "
-                    f"[dim]up to {int(overall)}s…[/dim]"
-                )
+        on_line = progress_for(ctx)
 
         try:
             # holehe v1.61 flags: --only-used (not --only-known), --no-color, --no-clear
@@ -79,6 +73,7 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
                 timeout=overall,
                 auto_install=True,
                 progress=progress,
+                on_line=on_line,
             )
         except SubprocessError as exc:
             err = str(exc)

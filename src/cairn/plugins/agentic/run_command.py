@@ -23,6 +23,7 @@ from pydantic import Field
 from cairn.execution.base import BasePlugin, PluginContext, PluginInput, PluginOutput
 from cairn.execution.cli_tools import _EXTRA_PATH_DIRS
 from cairn.execution.subprocess_util import SubprocessError, run_shell
+from cairn.execution.tool_progress import progress_for
 from cairn.execution.workspace import scrub_env
 
 _MAX_OUT = 8000  # cap stdout surfaced to the model
@@ -72,8 +73,11 @@ class RunCommandPlugin(BasePlugin[RunCommandInput, RunCommandOutput]):
         prefix = os.pathsep.join(str(p) for p in _EXTRA_PATH_DIRS if Path(p).is_dir())
         if prefix:
             env["PATH"] = f"{prefix}{os.pathsep}{env.get('PATH', '')}"
+        on_line = progress_for(ctx)
         try:
-            result = await run_shell(cmd, timeout=max(inp.timeout, 1.0), env=env, cwd=cwd)
+            result = await run_shell(
+                cmd, timeout=max(inp.timeout, 1.0), env=env, cwd=cwd, on_line=on_line
+            )
         except SubprocessError as exc:
             return RunCommandOutput(
                 source=self.name, command=cmd, summary_markdown=f"**run_command failed**: {exc}"

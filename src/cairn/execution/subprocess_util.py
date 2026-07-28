@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import shlex
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,6 +76,52 @@ async def _exec(
     return stdout, stderr, proc.returncode
 
 
+async def _exec_stream(
+    args: Sequence[str],
+    *,
+    timeout: float,
+    env: dict[str, str] | None,
+    cwd: Path | None,
+    on_line: Callable[[str], None],
+) -> tuple[bytes, bytes, int | None]:
+    """Like :func:`_exec` but stream stdout line-by-line to ``on_line`` (sync).
+
+    stderr is buffered (read after stdout EOF). Same timeout + kill discipline as
+    :func:`_exec`. Used by :func:`run_shell` / :func:`run_subprocess` only when an
+    ``on_line`` tap is attached; otherwise the buffered ``communicate()`` path runs.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+            cwd=cwd,
+        )
+    except FileNotFoundError as exc:
+        raise SubprocessError(f"binary not found: {args[0]!r}") from exc
+
+    out = bytearray()
+    try:
+        async with asyncio.timeout(timeout):
+            assert proc.stdout is not None
+            async for raw in proc.stdout:
+                out += raw
+                with contextlib.suppress(Exception):
+                    on_line(raw.decode(errors="replace").rstrip("\r\n"))
+            err = await proc.stderr.read() if proc.stderr is not None else b""
+            await proc.wait()
+    except TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        with contextlib.suppress(Exception):
+            await proc.wait()
+        raise SubprocessError(
+            f"timed out after {timeout:g}s running: {shlex.join(args)}"
+        ) from None
+    return bytes(out), err, proc.returncode
+
+
 async def run_subprocess(
     args: Sequence[str],
     *,
@@ -83,15 +129,22 @@ async def run_subprocess(
     env: dict[str, str] | None = None,
     cwd: Path | None = None,
     check: bool = True,
+    on_line: Callable[[str], None] | None = None,
 ) -> tuple[bytes, bytes]:
     """Run a command with array args and return ``(stdout, stderr)`` bytes.
 
     Raises :class:`SubprocessError` on timeout, non-zero exit (when
     ``check=True``), or a missing binary (FileNotFoundError). ``args`` is never
     concatenated into a shell. ``cwd`` runs the child in that directory;
-    ``None`` inherits the parent cwd.
+    ``None`` inherits the parent cwd. When ``on_line`` is given, stdout streams
+    line-by-line to it (the full bytes are still returned).
     """
-    stdout, stderr, rc = await _exec(args, timeout=timeout, env=env, cwd=cwd)
+    if on_line is None:
+        stdout, stderr, rc = await _exec(args, timeout=timeout, env=env, cwd=cwd)
+    else:
+        stdout, stderr, rc = await _exec_stream(
+            args, timeout=timeout, env=env, cwd=cwd, on_line=on_line
+        )
     if check and rc not in (0, None):
         raise SubprocessError(
             f"{shlex.join(args)} exited {rc}: {stderr.decode(errors='replace').strip()}"
@@ -105,6 +158,7 @@ async def run_shell(
     timeout: float = 120.0,
     env: dict[str, str] | None = None,
     cwd: Path | None = None,
+    on_line: Callable[[str], None] | None = None,
 ) -> CommandResult:
     """Run ``command`` under ``bash -c`` and return stdout/stderr/exit code.
 
@@ -113,9 +167,15 @@ async def run_shell(
     no-shell-at-Python-level invariant holds while still giving the agentic shell
     pipes, redirects, globs, and ``&&``. A non-zero exit is returned as data
     (never raised); only a timeout or a missing ``bash`` raise
-    :class:`SubprocessError`.
+    :class:`SubprocessError`. When ``on_line`` is given, stdout streams line-by-line
+    to it (the full bytes are still returned in :class:`CommandResult`).
     """
-    stdout, stderr, rc = await _exec(
-        ["bash", "-c", command], timeout=timeout, env=env, cwd=cwd
-    )
+    if on_line is None:
+        stdout, stderr, rc = await _exec(
+            ["bash", "-c", command], timeout=timeout, env=env, cwd=cwd
+        )
+    else:
+        stdout, stderr, rc = await _exec_stream(
+            ["bash", "-c", command], timeout=timeout, env=env, cwd=cwd, on_line=on_line
+        )
     return CommandResult(stdout, stderr, rc if rc is not None else 0)

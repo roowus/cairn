@@ -32,7 +32,14 @@ from cairn.interfaces.tui.cards import ToolCard
 from cairn.interfaces.tui.header import render_footer, render_header
 from cairn.interfaces.tui.markdown_stream import MarkdownStream
 from cairn.interfaces.tui.statusline import render_statusline
-from cairn.orchestration.events import TextDelta, ToolArgsStart, ToolExecEnd, ToolExecStart
+from cairn.interfaces.tui.thinking_stream import ThinkingStream
+from cairn.orchestration.events import (
+    TextDelta,
+    ThinkingDelta,
+    ToolArgsStart,
+    ToolExecEnd,
+    ToolExecStart,
+)
 from cairn.orchestration.progress import Progress
 
 if TYPE_CHECKING:
@@ -61,6 +68,7 @@ class _Composer:
         self._chrome = chrome
         self.cards: dict[str, ToolCard] = {}
         self.md = MarkdownStream()
+        self.thinking = ThinkingStream()
 
     def _statusline(self) -> RenderableType | None:
         if not self._show_status:
@@ -113,6 +121,12 @@ class _Composer:
             card.set_target(target)
         card.finish(status, summary, error)
 
+    def tool_progress(self, tool_call_id: str, line: str) -> None:
+        """A streamed stdout line for a running tool → its card's body (tail-capped)."""
+        card = self.cards.get(tool_call_id)
+        if card is not None:
+            card.append_body(line)
+
     # --- frame composition ---
 
     def _frame(self, body: RenderableType) -> RenderableType:
@@ -122,6 +136,8 @@ class _Composer:
             # the status readout (it replaces the flat statusline); the footer
             # carries the hints. Headless uses the flat branch below instead.
             zones: list[RenderableType] = [render_header(self._session)]
+            if not self.thinking.empty:
+                zones.append(self.thinking.render())
             if self.cards:
                 zones.append(
                     Panel(
@@ -185,6 +201,10 @@ class _ToolRecorder(Progress):
         self._composer.tool_finished(tool_call_id, name, target, status, summary, error)
         self._live.update(self._composer.render())
 
+    def on_tool_progress(self, tool_call_id: str, line: str) -> None:
+        self._composer.tool_progress(tool_call_id, line)
+        self._live.update(self._composer.render())
+
 
 async def run_turn(
     session: Session,
@@ -236,6 +256,8 @@ def _apply_event(composer: _Composer, ev: TurnEvent) -> None:
     """
     if isinstance(ev, TextDelta):
         composer.md.append(ev.text)
+    elif isinstance(ev, ThinkingDelta):
+        composer.thinking.append(ev.text)
     elif isinstance(ev, ToolArgsStart):
         composer.args_started(ev.tool_call_id, ev.tool_name)
     elif isinstance(ev, ToolExecStart):

@@ -157,7 +157,7 @@ async def test_run_cli_tool_auto_install(tmp_path, monkeypatch):
 
     calls: list[list[str]] = []
 
-    async def fake_run(args, timeout=30.0, env=None, check=True):
+    async def fake_run(args, timeout=30.0, env=None, check=True, on_line=None):
         calls.append(list(args))
         if args[:3] == ["uv", "tool", "install"]:
             sh = bin_dir / "holehe"

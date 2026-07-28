@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from rich.console import RenderableType
+from rich.console import Group, RenderableType
 from rich.spinner import Spinner
 from rich.text import Text
 
@@ -34,6 +34,7 @@ __all__ = ["ToolCard"]
 _PENDING = "pending"
 _RUNNING = "running"
 _DONE = "done"
+_BODY_MAX_LINES = 6  # tail cap of streamed stdout shown in a card
 
 
 @dataclass
@@ -46,6 +47,7 @@ class ToolCard:
     excerpt: str = ""
     is_error: bool = False
     state: str = _PENDING
+    body: list[str] = field(default_factory=list)
     _spinner: Spinner | None = field(default=None, repr=False)
 
     # --- stream-source transitions ---
@@ -77,6 +79,13 @@ class ToolCard:
         self.state = _DONE
         self.is_error = is_error
 
+    def append_body(self, line: str) -> None:
+        """Append a streamed stdout line (tail-capped) for live display."""
+        if line.strip():
+            self.body.append(line)
+            if len(self.body) > _BODY_MAX_LINES:
+                del self.body[: len(self.body) - _BODY_MAX_LINES]
+
     # --- rendering ---
 
     @property
@@ -91,18 +100,22 @@ class ToolCard:
             if self.target:
                 label.append(f" ({self.target})", style="dim")
             self._spinner.text = label  # stable instance → smooth animation
-            return self._spinner
-
-        line = Text()
-        if self.state == _DONE:
-            mark, mstyle = ("✓", "green") if not self.is_error else ("✗", "red")
-            line.append(f"  {mark} ", style=mstyle)
-            line.append(self.tool_name, style="cyan")
-            if self.target:
-                line.append(f" ({self.target})", style="dim")
-            if self.excerpt:
-                line.append(f" — {self.excerpt}", style="dim")
-        else:  # pending — model composing the call
-            line.append("  ▸ ", style="bold cyan")
-            line.append(self.tool_name, style="cyan")
-        return line
+            head: RenderableType = self._spinner
+        else:
+            line = Text()
+            if self.state == _DONE:
+                mark, mstyle = ("✓", "green") if not self.is_error else ("✗", "red")
+                line.append(f"  {mark} ", style=mstyle)
+                line.append(self.tool_name, style="cyan")
+                if self.target:
+                    line.append(f" ({self.target})", style="dim")
+                if self.excerpt:
+                    line.append(f" — {self.excerpt}", style="dim")
+            else:  # pending — model composing the call
+                line.append("  ▸ ", style="bold cyan")
+                line.append(self.tool_name, style="cyan")
+            head = line
+        if self.body:
+            # Streamed stdout tail, shown under the status line while/after the run.
+            return Group(head, *(Text(f"    │ {ln}", style="dim") for ln in self.body))
+        return head

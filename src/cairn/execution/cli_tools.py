@@ -26,6 +26,7 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -396,6 +397,7 @@ async def run_cli_tool(
     auto_install: bool = True,
     progress: object | None = None,
     check: bool = True,
+    on_line: Callable[[str], None] | None = None,
 ) -> tuple[bytes, bytes]:
     """Resolve (and optionally install) a CLI, then run it with array args.
 
@@ -426,4 +428,5 @@ async def run_cli_tool(
         timeout=timeout,
         env=_augment_path_env(),
         check=check,
+        on_line=on_line,
     )

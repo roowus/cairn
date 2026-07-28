@@ -11,7 +11,6 @@ more accurate). Use ``sherlock`` for breadth.
 
 from __future__ import annotations
 
-import contextlib
 import re
 from urllib.parse import urlparse
 
@@ -22,6 +21,7 @@ from cairn.execution.browser_http import make_browser_client
 from cairn.execution.cli_tools import run_cli_tool
 from cairn.execution.social_probe import DEFAULT_PLATFORMS, probe_many
 from cairn.execution.subprocess_util import SubprocessError
+from cairn.execution.tool_progress import progress_for
 
 _URL = re.compile(r"https?://[^\s,\]]+")
 
@@ -88,13 +88,7 @@ class SherlockPlugin(BasePlugin[SherlockInput, SherlockOutput]):
     async def run(self, inp: SherlockInput, ctx: PluginContext) -> SherlockOutput:
         overall = max(float(inp.overall_timeout), _MIN_OVERALL_TIMEOUT)
         progress = getattr(ctx, "progress", None)
-        status = getattr(progress, "_status", None) if progress is not None else None
-        if status is not None and hasattr(status, "update"):
-            with contextlib.suppress(Exception):
-                status.update(
-                    f"[cyan]sherlock[/cyan]({inp.target})  "
-                    f"[dim]full scan, up to {int(overall)}s…[/dim]"
-                )
+        on_line = progress_for(ctx)
 
         profiles: list[str] = []
         cli_error: str | None = None
@@ -112,6 +106,7 @@ class SherlockPlugin(BasePlugin[SherlockInput, SherlockOutput]):
                 timeout=overall,
                 auto_install=True,
                 progress=progress,
+                on_line=on_line,
             )
             text = (stdout or b"").decode(errors="replace")
             if not text.strip() and stderr:
@@ -128,12 +123,6 @@ class SherlockPlugin(BasePlugin[SherlockInput, SherlockOutput]):
         fp_found: list[str] = []
         fp_entities: list[Entity] = []
         if inp.crosscheck_major:
-            if status is not None and hasattr(status, "update"):
-                with contextlib.suppress(Exception):
-                    status.update(
-                        f"[cyan]sherlock[/cyan]({inp.target})  "
-                        f"[dim]first-party cross-check…[/dim]"
-                    )
             owns = ctx.http is None
             http = ctx.http or make_browser_client(
                 timeout=max(ctx.timeout, 30.0),

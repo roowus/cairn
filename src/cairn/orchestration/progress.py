@@ -50,6 +50,13 @@ class Progress:
     ) -> None:
         """A tool finished. ``status`` is ``"ok"`` or ``"error"``."""
 
+    def on_tool_progress(self, tool_call_id: str, line: str) -> None:
+        """A streamed stdout line from a long-running tool (sherlock/holehe/run_command).
+
+        High-volume (sherlock emits hundreds of lines) — receivers tail-cap what
+        they show. Observer-only, like every hook here.
+        """
+
     def on_turn_end(self, answer: str) -> None:
         """The turn finished with a final answer."""
 

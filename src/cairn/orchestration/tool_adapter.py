@@ -22,6 +22,7 @@ from pydantic_core import PydanticUndefined
 from cairn.core.security import wrap_untrusted
 from cairn.execution.base import PluginContext
 from cairn.execution.registry import PluginRegistry
+from cairn.execution.tool_progress import bind_tool_call_id
 
 if TYPE_CHECKING:
     from cairn.orchestration.audit import AuditWriter
@@ -80,7 +81,10 @@ def _make_tool(
             progress.on_tool_start(plugin.name, target, kwargs, tool_call_id)
         start = time.perf_counter()
         try:
-            out = await plugin.run(input_model.model_validate(kwargs), ctx)
+            # Bind this call's id so deep execution (plugin.run → run_shell)
+            # can tag streamed stdout to the right ToolCard via progress_for().
+            with bind_tool_call_id(tool_call_id):
+                out = await plugin.run(input_model.model_validate(kwargs), ctx)
             if graph is not None:
                 for entity in out.entities:
                     graph.add_entity(entity, source=plugin.name)
