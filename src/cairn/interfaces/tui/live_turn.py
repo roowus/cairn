@@ -25,9 +25,11 @@ from typing import TYPE_CHECKING, Any
 
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
+from rich.panel import Panel
 from rich.text import Text
 
 from cairn.interfaces.tui.cards import ToolCard
+from cairn.interfaces.tui.header import render_footer, render_header
 from cairn.interfaces.tui.markdown_stream import MarkdownStream
 from cairn.interfaces.tui.statusline import render_statusline
 from cairn.orchestration.events import TextDelta, ToolArgsStart, ToolExecEnd, ToolExecStart
@@ -46,11 +48,17 @@ class _Composer:
     """Holds insertion-ordered tool cards + streaming Markdown; composes the Live frame."""
 
     def __init__(
-        self, session: Session, *, status_hints: bool = False, show_status: bool = True
+        self,
+        session: Session,
+        *,
+        status_hints: bool = False,
+        show_status: bool = True,
+        chrome: bool = True,
     ) -> None:
         self._session = session
         self._status_hints = status_hints
         self._show_status = show_status
+        self._chrome = chrome
         self.cards: dict[str, ToolCard] = {}
         self.md = MarkdownStream()
 
@@ -108,6 +116,27 @@ class _Composer:
     # --- frame composition ---
 
     def _frame(self, body: RenderableType) -> RenderableType:
+        if self._chrome:
+            # Zoned layout (REPL): header + boxed tools + boxed answer + footer,
+            # sealed into scrollback as one structured block. The header carries
+            # the status readout (it replaces the flat statusline); the footer
+            # carries the hints. Headless uses the flat branch below instead.
+            zones: list[RenderableType] = [render_header(self._session)]
+            if self.cards:
+                zones.append(
+                    Panel(
+                        Group(*(c.render() for c in self.cards.values())),
+                        title="tools",
+                        title_align="left",
+                        border_style="cyan",
+                    )
+                )
+            zones.append(
+                Panel(body, title="answer", title_align="left", border_style="cyan")
+            )
+            zones.append(render_footer())
+            return Group(*zones)
+        # Flat layout (headless / legacy): bare tool lines + body + optional statusline.
         parts: list[RenderableType] = [*(c.render() for c in self.cards.values()), body]
         status = self._statusline()
         if status is not None:
@@ -165,6 +194,7 @@ async def run_turn(
     model: Any | None = None,
     show_status: bool = True,
     status_hints: bool = False,
+    chrome: bool = True,
 ) -> str:
     """Run one turn under a streaming ``Live`` region; return the final output.
 
@@ -179,7 +209,9 @@ async def run_turn(
     on cancel/exception the ``Live`` region closes (frame sealed/cleared) and the
     error propagates for the caller (REPL/headless) to report.
     """
-    composer = _Composer(session, status_hints=status_hints, show_status=show_status)
+    composer = _Composer(
+        session, status_hints=status_hints, show_status=show_status, chrome=chrome
+    )
     with Live(
         composer.render(),
         console=console,

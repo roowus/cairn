@@ -286,6 +286,63 @@ async def test_run_turn_streams_tools_and_seals_markdown(fake_settings, tmp_path
     assert "Title" in rendered and "body text" in rendered  # markdown sealed into the frame
 
 
+async def test_run_turn_chrome_zoned_frame(fake_settings, tmp_path):
+    """U1: chrome=True renders the per-turn zoned block — a header line, a 'tools'
+    panel around the tool card, an 'answer' panel around the sealed markdown, and a
+    '/help · Esc stop' footer. This is the structured REPL layout."""
+    session = _session(fake_settings, tmp_path)
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=60, color_system=None)
+    try:
+        await run_turn(
+            session,
+            "x",
+            console=console,
+            chrome=True,
+            model=TestModel(
+                call_tools=["unit_tui_echo"], custom_output_text="# Title\n\nbody"
+            ),
+        )
+    finally:
+        await session.aclose()
+    rendered = buf.getvalue()
+    assert "cairn" in rendered  # header line
+    assert "tools" in rendered and "answer" in rendered  # the two panel titles
+    assert "/help" in rendered  # footer
+    assert "unit_tui_echo" in rendered  # tool still present inside the tools panel
+    assert "Title" in rendered and "body" in rendered  # markdown inside the answer panel
+
+
+async def test_run_turn_headless_flat_has_no_chrome(fake_settings, tmp_path):
+    """U1 regression: chrome=False + show_status=False keeps the pre-U1 flat,
+    pipe-friendly output — no header, no boxed panels, no footer. Headless
+    (``cairn search``) must not gain chrome."""
+    session = _session(fake_settings, tmp_path)
+    buf = io.StringIO()
+    console = Console(file=buf, force_terminal=False, width=60, color_system=None)
+    try:
+        await run_turn(
+            session,
+            "x",
+            console=console,
+            chrome=False,
+            show_status=False,
+            model=TestModel(
+                call_tools=["unit_tui_echo"], custom_output_text="# Title\n\nbody"
+            ),
+        )
+    finally:
+        await session.aclose()
+    rendered = buf.getvalue()
+    # flat output still carries the tool line + the sealed markdown...
+    assert "unit_tui_echo" in rendered
+    assert "Title" in rendered and "body" in rendered
+    # ...but none of the chrome zones.
+    assert "answer" not in rendered  # no answer panel title
+    assert "/help" not in rendered  # no footer
+    assert "v0.1.0" not in rendered  # no header
+
+
 # --- 4. tool_call_id correlation (robust under parallel tool execution) --------
 
 
