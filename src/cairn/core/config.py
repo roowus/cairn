@@ -102,6 +102,16 @@ class Settings(BaseSettings):
     # hackertarget ~50/day) are excluded from the brain's tools. Set
     # CAIRN_ALLOW_DAILY_LIMITED=1 to opt them in. Rate-limited-only sources stay on.
     allow_daily_limited: bool = False
+    # --- Parallel-session knobs (see docs/architecture/parallel-sessions.md) ---
+    # Ceiling on concurrently-running sessions in a SessionPool. Throughput/
+    # orchestration only — never relaxes the hard-stop. The default is conservative
+    # (most free OSINT sources rate-limit hard above a handful of parallel calls).
+    max_concurrent_sessions: int = 4
+    # Optional per-session ceilings enforced by the SessionPool (NOT by the
+    # observer-only UsageTracker). None = unbounded; the pool halts a session's
+    # turns once its tracker crosses the cap.
+    session_max_spend: float | None = None
+    session_max_calls: int | None = None
 
     @classmethod
     def settings_customise_sources(

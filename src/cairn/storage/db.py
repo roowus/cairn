@@ -26,6 +26,11 @@ class Database:
             self._conn.row_factory = sqlite3.Row
             self._conn.execute("PRAGMA journal_mode=WAL;")
             self._conn.execute("PRAGMA foreign_keys=ON;")
+            # Let concurrent writers (e.g. N parallel sessions sharing one DB)
+            # retry for up to 5s on a lock instead of raising "database is
+            # locked" immediately. WAL already lets readers proceed concurrently;
+            # busy_timeout makes writers serialize gracefully under contention.
+            self._conn.execute("PRAGMA busy_timeout=5000;")
         return self._conn
 
     def init(self) -> None:
@@ -34,6 +39,12 @@ class Database:
         self.conn.executescript(sql)
         self.conn.commit()
         self._ensure_columns()
+        # idx_audit_session can't live in schema.sql: on a legacy DB the
+        # session_id column is added by _ensure_columns above (after
+        # executescript), so the index is created here, once the column is
+        # guaranteed present. Idempotent.
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id);")
+        self.conn.commit()
 
     def _ensure_columns(self) -> None:
         """Add columns introduced after the initial schema to existing DBs.
@@ -47,6 +58,9 @@ class Database:
         additions = {
             "elapsed_ms": "ALTER TABLE audit_log ADD COLUMN elapsed_ms REAL",
             "usage_json": "ALTER TABLE audit_log ADD COLUMN usage_json TEXT",
+            # Tags each row with the parallel session that wrote it (None for
+            # the single-session path). Back-fills NULL on legacy DBs.
+            "session_id": "ALTER TABLE audit_log ADD COLUMN session_id TEXT",
         }
         for col, ddl in additions.items():
             if col not in cols:

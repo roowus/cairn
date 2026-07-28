@@ -15,6 +15,11 @@ class AuditWriter:
     def __init__(self, db: Database, *, model_name: str | None = None) -> None:
         self._db = db
         self._model = model_name
+        # Optional tag identifying the parallel session that owns this writer.
+        # Set by a SessionPool on each pooled session (None on the single-session
+        # path). Carried into every audit row so a shared DB can be queried per
+        # session. Defaulting to None keeps every existing caller unchanged.
+        self._session_id: str | None = None
 
     @property
     def model_name(self) -> str | None:
@@ -23,6 +28,14 @@ class AuditWriter:
     @model_name.setter
     def model_name(self, value: str | None) -> None:
         self._model = value
+
+    @property
+    def session_id(self) -> str | None:
+        return self._session_id
+
+    @session_id.setter
+    def session_id(self, value: str | None) -> None:
+        self._session_id = value
 
     def record(
         self,
@@ -42,8 +55,8 @@ class AuditWriter:
         self._db.execute(
             "INSERT INTO audit_log "
             "(model, tool, target, params_json, status, result_size, error, "
-            "elapsed_ms, usage_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "elapsed_ms, usage_json, session_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 model or self._model,
                 tool,
@@ -54,5 +67,6 @@ class AuditWriter:
                 error,
                 round(elapsed_ms, 2) if elapsed_ms is not None else None,
                 usage_json,
+                self._session_id,
             ),
         )

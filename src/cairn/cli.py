@@ -4,6 +4,7 @@ Commands:
   cairn                    launch the interactive REPL (default)
   cairn repl               same as above
   cairn search <query>     one-shot agentic query
+  cairn parallel <q1> …    run N investigations concurrently (one session each)
   cairn plugin <name> …    run an OSINT plugin directly (no LLM)
   cairn plugins            list discovered plugins (tier + cost)
   cairn usage              show credits/time/quota used (from the audit log)
@@ -83,6 +84,26 @@ def search_cmd(
         console.print("[red]Provide a query:[/red] cairn search <your question>")
         raise typer.Exit(code=1)
     _search(" ".join(query))
+
+
+@app.command("parallel")
+def parallel_cmd(
+    query: list[str] = typer.Argument(  # noqa: B008
+        ..., help="Two or more independent investigations to run concurrently."
+    ),
+) -> None:
+    """Run N investigations at once (one session each), then merge their graphs.
+
+    e.g. `cairn parallel "recon example.com" "breach check for a@b.com"`.
+    Capped at max_concurrent_sessions (CAIRN_MAX_CONCURRENT_SESSIONS).
+    """
+    from cairn.interfaces.parallel import parallel
+
+    queries = [q for q in query if q]
+    if len(queries) < 2:
+        console.print('[red]Provide 2+ queries:[/red] cairn parallel "<q1>" "<q2>" …')
+        raise typer.Exit(code=1)
+    parallel(queries)
 
 
 @app.command("plugins")

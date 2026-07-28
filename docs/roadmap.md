@@ -121,6 +121,14 @@ The deferred multi-agent coordinator: spawn focused investigator agents
 registry. Lowest priority; only worth it once single-brain breadth becomes a
 limit.
 
+**Foundation landed for issue #2** (parallel sessions): a
+[`SessionPool`](../src/cairn/orchestration/session_pool.py) runs N concurrent
+sessions on one loop with a shared audit log, per-session budgets, cancel-by-id,
+and on-demand graph merge — the throughput/orchestration substrate for both
+this item and the parallel-sessions epic. The UI wiring (`/spawn`, laned view)
+is deferred until U6 lands; see
+[parallel sessions](architecture/parallel-sessions.md).
+
 ## 10. Usage & cost reporting — ✅ DONE
 
 The brain can reach for daily-quota'd and credit-metered sources, so the CLI now

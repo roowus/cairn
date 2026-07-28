@@ -9,6 +9,7 @@ persistence between sessions — a stand-in until Kùzu is added behind the same
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -25,33 +26,65 @@ def _node_id(entity: Entity) -> str:
 class NetworkXGraphStore(GraphStore):
     def __init__(self) -> None:
         self._g: nx.MultiDiGraph = nx.MultiDiGraph()
+        # Re-entrant guard around mutation. The methods stay synchronous, so an
+        # asyncio.Lock would force them async (and clash with the tool closure);
+        # an RLock is transparent on the single-session hot path and makes a
+        # graph shared across sessions (or mutated from a thread executor) safe.
+        self._lock = threading.RLock()
 
     @property
     def graph(self) -> nx.MultiDiGraph:
         return self._g
 
     def add_entity(self, entity: Entity, *, source: str | None = None) -> None:
-        nid = _node_id(entity)
-        if nid in self._g:
-            # merge attrs; keep first-seen position
-            self._g.nodes[nid].update(
-                {k: v for k, v in entity.attrs.items() if k not in self._g.nodes[nid]}
-            )
-            if source and source not in self._g.nodes[nid].get("sources", []):
-                self._g.nodes[nid].setdefault("sources", []).append(source)
-        else:
-            self._g.add_node(
-                nid,
-                type=entity.type,
-                value=entity.value,
-                attrs=dict(entity.attrs),
-                sources=[source] if source else [],
-            )
+        with self._lock:
+            nid = _node_id(entity)
+            if nid in self._g:
+                # merge attrs; keep first-seen position
+                self._g.nodes[nid].update(
+                    {k: v for k, v in entity.attrs.items() if k not in self._g.nodes[nid]}
+                )
+                if source and source not in self._g.nodes[nid].get("sources", []):
+                    self._g.nodes[nid].setdefault("sources", []).append(source)
+            else:
+                self._g.add_node(
+                    nid,
+                    type=entity.type,
+                    value=entity.value,
+                    attrs=dict(entity.attrs),
+                    sources=[source] if source else [],
+                )
 
     def add_relationship(self, a: Entity, rel: str, b: Entity) -> None:
-        self.add_entity(a)
-        self.add_entity(b)
-        self._g.add_edge(_node_id(a), _node_id(b), rel=rel)
+        with self._lock:
+            # add_entity re-acquires the RLock (re-entrant) — safe, no deadlock.
+            self.add_entity(a)
+            self.add_entity(b)
+            self._g.add_edge(_node_id(a), _node_id(b), rel=rel)
+
+    def merge(self, other: NetworkXGraphStore) -> None:
+        """Fold ``other``'s entities/relationships into this store in place.
+
+        Cross-session entity identity is the existing ``"type:value"`` node key,
+        so an entity mined by two pooled sessions collapses to one node — its
+        ``sources`` list accumulates both, mirroring :meth:`add_entity`'s
+        first-seen merge. Callers should ensure ``other`` is quiescent (e.g. its
+        session has drained) before merging.
+        """
+        og = other.graph  # read-only view of the donor store
+        with self._lock:
+            for nid, data in og.nodes(data=True):
+                if nid in self._g:
+                    node = self._g.nodes[nid]
+                    for k, v in (data.get("attrs") or {}).items():
+                        node.setdefault("attrs", {}).setdefault(k, v)
+                    for s in data.get("sources") or []:
+                        if s not in node.setdefault("sources", []):
+                            node["sources"].append(s)
+                else:
+                    self._g.add_node(nid, **dict(data))
+            for u, v, edata in og.edges(data=True):
+                self._g.add_edge(u, v, **dict(edata))
 
     def entities(self) -> list[Entity]:
         out: list[Entity] = []

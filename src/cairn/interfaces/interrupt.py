@@ -13,7 +13,8 @@ import contextlib
 import select
 import sys
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
+from typing import Any
 
 
 class TurnCancelled(Exception):
@@ -69,6 +70,38 @@ def run_cancellable[T](
 def _cancel_task(task: asyncio.Task) -> None:  # type: ignore[type-arg]
     if not task.done():
         task.cancel()
+
+
+# --- Programmatic cancellation (the parallel-session path) ---------------------
+#
+# ``run_cancellable`` above is the *interactive* path: it owns the stdin watcher
+# and cancels the single foreground turn. Parallel sessions are cancelled
+# programmatically by id (issue #2: "cancel session X / all"). These primitives
+# are that path — they never touch the terminal and never block on stdin, so a
+# background session can be cancelled without a foreground REPL.
+
+
+def cancel_async_task(task: asyncio.Task[Any]) -> bool:
+    """Cancel one in-flight task programmatically.
+
+    Idempotent: returns ``True`` if a cancellation was issued, ``False`` if the
+    task was already done. The caller is expected to ``await`` the task
+    afterwards (propagating or swallowing :class:`asyncio.CancelledError`) so the
+    cancellation drains and the loop stays usable.
+    """
+    if task.done():
+        return False
+    task.cancel()
+    return True
+
+
+def cancel_tasks(tasks: Iterable[asyncio.Task[Any]]) -> int:
+    """Cancel every not-yet-done task in ``tasks``. Returns how many were cancelled."""
+    n = 0
+    for t in tasks:
+        if cancel_async_task(t):
+            n += 1
+    return n
 
 
 class _KeyWatcher(threading.Thread):

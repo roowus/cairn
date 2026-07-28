@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
     result_size  INTEGER,
     error        TEXT,
     elapsed_ms   REAL,                        -- wall-clock of the tool call (ms)
-    usage_json   TEXT                         -- per-call cost/quota snapshot (see usage.snapshot)
+    usage_json   TEXT,                        -- per-call cost/quota snapshot (see usage.snapshot)
+    session_id   TEXT                         -- parallel session that wrote this row (None for single-session)
 );
 
 CREATE TABLE IF NOT EXISTS cases (
@@ -43,3 +44,5 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_audit_tool   ON audit_log(tool);
 CREATE INDEX IF NOT EXISTS idx_audit_ts     ON audit_log(ts);
 CREATE INDEX IF NOT EXISTS idx_entities_val ON entities(type, value);
+-- idx_audit_session is created in Database.init() after _ensure_columns adds
+-- the session_id column (it cannot be created here on a legacy DB pre-migration).
