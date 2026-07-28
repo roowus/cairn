@@ -1,0 +1,2 @@
+# Runtime databases (cairn.db) live in ~/.cairn by default, not here.
+# This file only keeps the directory in git.

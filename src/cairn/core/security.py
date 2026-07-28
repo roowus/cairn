@@ -1,0 +1,83 @@
+"""Security helpers: untrusted-data wrapping and secret redaction."""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+# Tags that delimit untrusted content handed back to the model. See
+# docs/architecture/security.md — the system prompt instructs the model to treat
+# the contents as passive observation only.
+_OPEN = "<untrusted_external_data"
+_CLOSE = "</untrusted_external_data>"
+
+
+def _attr_escape(s: str) -> str:
+    """Escape a string for safe interpolation into a double-quoted XML attribute."""
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def wrap_untrusted(source: str, target: str, content: str) -> str:
+    """Wrap external content so the model cannot mistake it for instructions."""
+    # Defensive: strip any already-present untrusted tags from nested content so
+    # an attacker can't forge a closing tag to break out of the wrapper.
+    cleaned = content.replace(_OPEN, "&lt;untrusted_external_data")
+    cleaned = cleaned.replace(_CLOSE, "&lt;/untrusted_external_data&gt;")
+    # source/target are interpolated into the opening tag's *attributes*, so they
+    # must be attribute-escaped too — not just `content`. A model-authored
+    # run_command target can carry the literal closing tag or a double-quote;
+    # interpolated raw, that breaks the wrapper and lets text appear OUTSIDE
+    # <untrusted_external_data> (a Layer-B / anti-injection bypass). `source` is a
+    # fixed plugin name today, but escape it anyway for defense in depth.
+    src = _attr_escape(source)
+    tgt = _attr_escape(target)
+    return f'{_OPEN} source="{src}" target="{tgt}">\n{cleaned}\n{_CLOSE}'
+
+
+# Common secret shapes we scrub from any text we persist.
+_SECRET_PATTERNS = [
+    # Generic API keys / bearer tokens.
+    re.compile(
+        r"(?i)(api[_-]?key|token|secret|bearer|authorization)[\"' :=]+([A-Za-z0-9_\-/+=]{12,})"
+    ),
+    # AWS access-key IDs: long-term (AKIA) + STS temporary (ASIA) + role/user.
+    re.compile(r"(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA)[0-9A-Z]{16}"),
+    # sk-... style (Anthropic/OpenAI).
+    re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
+]
+
+
+def redact_text(text: str) -> str:
+    """Replace likely secret substrings with ``[REDACTED]``."""
+    redacted = text
+    for pat in _SECRET_PATTERNS:
+        redacted = pat.sub(
+            lambda m: (
+                f"{m.group(1) if m.lastindex else ''}=[REDACTED]" if m.lastindex else "[REDACTED]"
+            ),
+            redacted,
+        )
+    return redacted
+
+
+def redact_secrets(value: Any) -> Any:
+    """Recursively redact secret-looking strings in dicts/lists for safe logging."""
+    if isinstance(value, str):
+        return redact_text(value)
+    if isinstance(value, dict):
+        return {
+            k: ("[REDACTED]" if _looks_secret(k) else redact_secrets(v)) for k, v in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return type(value)(redact_secrets(v) for v in value)
+    return value
+
+
+def _looks_secret(key: str) -> bool:
+    k = key.lower()
+    return any(s in k for s in ("key", "token", "secret", "password", "auth"))

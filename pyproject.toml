@@ -1,0 +1,99 @@
+[project]
+name = "cairn"
+version = "0.1.0"
+description = "Terminal-native agentic OSINT assistant — like Claude Code, but for OSINT."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "rewis" }]
+keywords = ["osint", "ai", "agent", "cli", "intelligence", "pydantic-ai"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+dependencies = [
+    # Pinned <3: the streaming UI bridge (interfaces/tui/events.py) maps PydanticAI
+    # event classes by name; a 2.x->3.x bump could rename them. Confine all event
+    # handling to that one module so a bump is a one-file patch.
+    "pydantic-ai>=2.18,<3",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "httpx[http2]>=0.27",
+    "rich>=13.7",
+    # prompt_toolkit owns the input line: history, multiline, Emacs keys,
+    # slash/@file completion. The closest Python equivalent of pi's Editor.
+    "prompt_toolkit>=3.0",
+    "typer>=0.12",
+    "networkx>=3.3",
+    "dnspython>=2.6",
+    "anyio>=4.4",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+crawl = [
+    "crawl4ai>=0.3",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+]
+paid-apis = [
+    "shodan>=1.31",
+    "vt-py>=0.18",
+]
+mcp = [
+    "mcp>=1.0",
+]
+tools = [
+    # External CLIs wrapped by plugins (holehe/sherlock). Optional: the plugins
+    # degrade gracefully if the binary is absent. Install with: uv sync --extra tools
+    "holehe>=1.61",
+    "sherlock-project>=0.14",
+]
+# Textual is an OPTIONAL full-screen (alt-screen) mode for a future `cairn --tui`.
+# The default REPL is inline Rich Live + prompt_toolkit (preserves scrollback).
+# Install with: uv sync --extra tui
+tui = [
+    "textual>=0.65",
+]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+cairn = "cairn.cli:main"
+
+[project.entry-points."cairn.plugins"]
+# In-tree plugins are auto-discovered; third-party distributions register here.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cairn"]
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "network: tests that hit real (free) APIs — skipped in CI by default",
+]
+
+[tool.mypy]
+strict = true
+packages = ["cairn"]

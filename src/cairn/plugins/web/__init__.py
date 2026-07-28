@@ -1,0 +1,1 @@
+"""Plugins (web category)."""
