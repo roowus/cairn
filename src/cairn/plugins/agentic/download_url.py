@@ -13,10 +13,10 @@ import hashlib
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
 from pydantic import Field
 
 from cairn.execution.base import BasePlugin, PluginContext, PluginInput, PluginOutput
+from cairn.execution.http_util import http_client
 from cairn.execution.workspace import Deny, authorize, resolve_in_workspace
 
 
@@ -84,38 +84,39 @@ class DownloadUrlPlugin(BasePlugin[DownloadUrlInput, DownloadUrlOutput]):
             )
         dest_path = resolve_in_workspace(candidate, roots)
         assert dest_path is not None  # authorize() returned Allow → inside the ws
-        http = ctx.http or httpx.AsyncClient(timeout=ctx.timeout, follow_redirects=True)
-        try:
-            r = await http.get(url)
-        except Exception as exc:
-            return DownloadUrlOutput(
-                source=self.name, url=url, summary_markdown=f"**download_url error**: {exc}"
-            )
-        if r.status_code >= 400:
+        async with http_client(ctx) as http:
+            try:
+                r = await http.get(url)
+            except Exception as exc:
+                return DownloadUrlOutput(
+                    source=self.name, url=url, summary_markdown=f"**download_url error**: {exc}"
+                )
+            if r.status_code >= 400:
+                return DownloadUrlOutput(
+                    source=self.name,
+                    url=url,
+                    summary_markdown=f"**download_url failed**: HTTP {r.status_code} for {url}",
+                )
+            data = r.content
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest_path.write_bytes(data)
+            ct = r.headers.get("content-type", "")
+            digest = hashlib.sha256(data).hexdigest()
             return DownloadUrlOutput(
                 source=self.name,
                 url=url,
-                summary_markdown=f"**download_url failed**: HTTP {r.status_code} for {url}",
+                dest=str(dest_path),
+                bytes_saved=len(data),
+                content_type=ct,
+                sha256=digest,
+                summary_markdown=(
+                    f"Downloaded **{len(data)} bytes** from `{url}` → `{dest_path}`.\n"
+                    f"- content-type: `{ct or 'unknown'}`\n"
+                    f"- sha256: `{digest}`\n"
+                    f"- Next: `run_command` `file {dest_path}` / `binwalk` / "
+                    f"`exiftool` / `strings`."
+                ),
             )
-        data = r.content
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        dest_path.write_bytes(data)
-        ct = r.headers.get("content-type", "")
-        digest = hashlib.sha256(data).hexdigest()
-        return DownloadUrlOutput(
-            source=self.name,
-            url=url,
-            dest=str(dest_path),
-            bytes_saved=len(data),
-            content_type=ct,
-            sha256=digest,
-            summary_markdown=(
-                f"Downloaded **{len(data)} bytes** from `{url}` → `{dest_path}`.\n"
-                f"- content-type: `{ct or 'unknown'}`\n"
-                f"- sha256: `{digest}`\n"
-                f"- Next: `run_command` `file {dest_path}` / `binwalk` / `exiftool` / `strings`."
-            ),
-        )
 
 
 def _default_name(url: str) -> str:

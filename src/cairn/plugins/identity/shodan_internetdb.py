@@ -6,10 +6,10 @@ hostnames, open ports, known CVEs, and tags Shodan has observed.
 
 from __future__ import annotations
 
-import httpx
 from pydantic import Field
 
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
+from cairn.execution.http_util import http_client
 
 
 class ShodanInternetDBInput(PluginInput):
@@ -36,37 +36,41 @@ class ShodanInternetDBPlugin(BasePlugin[ShodanInternetDBInput, ShodanInternetDBO
     )
 
     async def run(self, inp: ShodanInternetDBInput, ctx: PluginContext) -> ShodanInternetDBOutput:
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        r = await http.get(f"https://internetdb.shodan.io/{inp.target}")
-        if r.status_code == 404:
+        async with http_client(ctx) as http:
+            r = await http.get(f"https://internetdb.shodan.io/{inp.target}")
+            if r.status_code == 404:
+                return ShodanInternetDBOutput(
+                    source=self.name,
+                    summary_markdown=(
+                        f"**{inp.target}** — Shodan InternetDB: no data (not indexed)."
+                    ),
+                    entities=[Entity(type="ip", value=inp.target)],
+                )
+            r.raise_for_status()
+            d = r.json() if r.text else {}
+            hostnames = d.get("hostnames") or []
+            ports = d.get("ports") or []
+            vulns = d.get("vulns") or []
+            tags = d.get("tags") or []
+            summary = (
+                f"**{inp.target}** — Shodan InternetDB\n"
+                f"- Hostnames: {', '.join(hostnames) or 'none'}\n"
+                f"- Open ports: {', '.join(map(str, ports)) or 'none'}\n"
+                f"- Known CVEs: {', '.join(vulns) or 'none'}\n"
+                f"- Tags: {', '.join(tags) or 'none'}\n"
+            )
             return ShodanInternetDBOutput(
                 source=self.name,
-                summary_markdown=f"**{inp.target}** — Shodan InternetDB: no data (not indexed).",
-                entities=[Entity(type="ip", value=inp.target)],
+                summary_markdown=summary,
+                hostnames=hostnames,
+                ports=ports,
+                vulns=vulns,
+                tags=tags,
+                entities=[
+Entity(
+                        type="ip",
+                        value=inp.target,
+                        attrs={"ports": ports, "cve_count": len(vulns)},
+                    )
+                ],
             )
-        r.raise_for_status()
-        d = r.json() if r.text else {}
-        hostnames = d.get("hostnames") or []
-        ports = d.get("ports") or []
-        vulns = d.get("vulns") or []
-        tags = d.get("tags") or []
-        summary = (
-            f"**{inp.target}** — Shodan InternetDB\n"
-            f"- Hostnames: {', '.join(hostnames) or 'none'}\n"
-            f"- Open ports: {', '.join(map(str, ports)) or 'none'}\n"
-            f"- Known CVEs: {', '.join(vulns) or 'none'}\n"
-            f"- Tags: {', '.join(tags) or 'none'}\n"
-        )
-        return ShodanInternetDBOutput(
-            source=self.name,
-            summary_markdown=summary,
-            hostnames=hostnames,
-            ports=ports,
-            vulns=vulns,
-            tags=tags,
-            entities=[
-                Entity(type="ip", value=inp.target, attrs={"ports": ports, "cve_count": len(vulns)})
-            ],
-        )

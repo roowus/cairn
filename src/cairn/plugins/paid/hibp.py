@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 from pydantic import Field
 
 from cairn.execution.base import (
@@ -15,6 +14,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 
 class HibpInput(PluginInput):
@@ -42,31 +42,35 @@ class HibpPlugin(BasePlugin[HibpInput, HibpOutput]):
 
     async def run(self, inp: HibpInput, ctx: PluginContext) -> HibpOutput:
         key = ctx.key("hibp") or ""
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        r = await http.get(
-            f"https://haveibeenpwned.com/api/v3/breachedaccount/{inp.target}",
-            params={
-                "truncateResponse": "false",
-                "includeUnverified": str(inp.include_unverified).lower(),
-            },
-            headers={"hibp-api-key": key, "user-agent": ctx.user_agent},
-        )
-        if r.status_code == 404:
+        async with http_client(ctx) as http:
+            r = await http.get(
+                f"https://haveibeenpwned.com/api/v3/breachedaccount/{inp.target}",
+                params={
+                    "truncateResponse": "false",
+                    "includeUnverified": str(inp.include_unverified).lower(),
+                },
+                headers={"hibp-api-key": key, "user-agent": ctx.user_agent},
+            )
+            if r.status_code == 404:
+                return HibpOutput(
+                    source=self.name,
+                    summary_markdown=f"**{inp.target}** — HIBP: no breaches found. ✓",
+                    entities=[Entity(type="email", value=inp.target)],
+                )
+            r.raise_for_status()
+            data: list[dict[str, Any]] = r.json()
+            names = sorted({b.get("Name") or b.get("Title") for b in data if isinstance(b, dict)})
+            preview = ", ".join(names)
+            summary = f"**{inp.target}** — HIBP: found in {len(names)} breach(es): {preview}"
             return HibpOutput(
                 source=self.name,
-                summary_markdown=f"**{inp.target}** — HIBP: no breaches found. ✓",
-                entities=[Entity(type="email", value=inp.target)],
+                summary_markdown=summary,
+                breaches=names,
+                entities=[
+                    Entity(
+                        type="email",
+                        value=inp.target,
+                        attrs={"breach_count": len(names)},
+                    )
+                ],
             )
-        r.raise_for_status()
-        data: list[dict[str, Any]] = r.json()
-        names = sorted({b.get("Name") or b.get("Title") for b in data if isinstance(b, dict)})
-        preview = ", ".join(names)
-        summary = f"**{inp.target}** — HIBP: found in {len(names)} breach(es): {preview}"
-        return HibpOutput(
-            source=self.name,
-            summary_markdown=summary,
-            breaches=names,
-            entities=[Entity(type="email", value=inp.target, attrs={"breach_count": len(names)})],
-        )

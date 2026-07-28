@@ -238,7 +238,7 @@ System prompt (`reasoning/system_prompt.py`) encodes this order.
 - Allowlist only: `uv tool install sherlock-project` / `holehe`  
 - User should **never** need a manual install step  
 
-See [configuration.md § self-installing CLIs](configuration.md#5-self-installing-external-clis-you-do-nothing).
+See [configuration.md § self-installing CLIs](configuration.md#self-installing-external-clis-you-do-nothing).
 
 ---
 

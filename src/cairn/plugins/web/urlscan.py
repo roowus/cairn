@@ -9,7 +9,6 @@ A ``CAIRN_URLSCAN_KEY`` is used opportunistically if present for a higher limit.
 
 from __future__ import annotations
 
-import httpx
 from pydantic import BaseModel, Field
 
 from cairn.execution.base import (
@@ -20,6 +19,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 
 def _looks_like_ip(target: str) -> bool:
@@ -93,68 +93,66 @@ class UrlscanPlugin(BasePlugin[UrlscanInput, UrlscanOutput]):
     )
 
     async def run(self, inp: UrlscanInput, ctx: PluginContext) -> UrlscanOutput:
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        headers = {"User-Agent": ctx.user_agent}
-        token = ctx.key("urlscan")
-        if token:
-            headers["API-Key"] = token
-        r = await http.get(
-            "https://urlscan.io/api/v1/search/",
-            params={"q": _query(inp.target), "size": min(max(inp.limit, 1), 100)},
-            headers=headers,
-        )
-        if r.status_code == 404:
-            return UrlscanOutput(
-                source=self.name,
-                summary_markdown=f"**{inp.target}** — urlscan: no scans found.",
-                entities=[Entity(type="domain", value=inp.target)],
+        async with http_client(ctx) as http:
+            headers = {"User-Agent": ctx.user_agent}
+            token = ctx.key("urlscan")
+            if token:
+                headers["API-Key"] = token
+            r = await http.get(
+                "https://urlscan.io/api/v1/search/",
+                params={"q": _query(inp.target), "size": min(max(inp.limit, 1), 100)},
+                headers=headers,
             )
-        if r.status_code in (429, 502, 503, 504):
-            # urlscan's free community endpoint intermittently rate-limits / 503s.
-            return UrlscanOutput(
-                source=self.name,
-                summary_markdown=(
-                    f"**{inp.target}** — urlscan temporarily unavailable "
-                    f"(HTTP {r.status_code}); retry later."
-                ),
-                entities=[Entity(type="domain", value=inp.target)],
-            )
-        r.raise_for_status()
-        data = r.json()
-        raw_total = int(data.get("total") or 0)
-        hits: list[UrlscanHit] = []
-        seen_urls: set[str] = set()
-        for res in data.get("results", []) or []:
-            page = res.get("page", {}) or {}
-            task = res.get("task", {}) or {}
-            page_domain = page.get("domain")
-            page_ip = page.get("ip")
-            if not _on_target_hit(page_domain, page_ip, inp.target):
-                continue
-            page_url = page.get("url")
-            dedupe_key = (page_url or "").rstrip("/") or f"{page_domain}|{page_ip}"
-            if dedupe_key in seen_urls:
-                continue
-            seen_urls.add(dedupe_key)
-            hits.append(
-                UrlscanHit(
-                    page_url=page_url,
-                    page_domain=page_domain,
-                    page_ip=page_ip,
-                    page_title=page.get("title"),
-                    server=page.get("server"),
-                    task_url=task.get("url"),
+            if r.status_code == 404:
+                return UrlscanOutput(
+                    source=self.name,
+                    summary_markdown=f"**{inp.target}** — urlscan: no scans found.",
+                    entities=[Entity(type="domain", value=inp.target)],
                 )
-            )
-            if len(hits) >= inp.limit:
-                break
+            if r.status_code in (429, 502, 503, 504):
+                # urlscan's free community endpoint intermittently rate-limits / 503s.
+                return UrlscanOutput(
+                    source=self.name,
+                    summary_markdown=(
+                        f"**{inp.target}** — urlscan temporarily unavailable "
+                        f"(HTTP {r.status_code}); retry later."
+                    ),
+                    entities=[Entity(type="domain", value=inp.target)],
+                )
+            r.raise_for_status()
+            data = r.json()
+            raw_total = int(data.get("total") or 0)
+            hits: list[UrlscanHit] = []
+            seen_urls: set[str] = set()
+            for res in data.get("results", []) or []:
+                page = res.get("page", {}) or {}
+                task = res.get("task", {}) or {}
+                page_domain = page.get("domain")
+                page_ip = page.get("ip")
+                if not _on_target_hit(page_domain, page_ip, inp.target):
+                    continue
+                page_url = page.get("url")
+                dedupe_key = (page_url or "").rstrip("/") or f"{page_domain}|{page_ip}"
+                if dedupe_key in seen_urls:
+                    continue
+                seen_urls.add(dedupe_key)
+                hits.append(
+                    UrlscanHit(
+                        page_url=page_url,
+                        page_domain=page_domain,
+                        page_ip=page_ip,
+                        page_title=page.get("title"),
+                        server=page.get("server"),
+                        task_url=task.get("url"),
+                    )
+                )
+                if len(hits) >= inp.limit:
+                    break
 
-        out = UrlscanOutput(source=self.name, total=raw_total, hits=hits)
-        out.summary_markdown = _summary(out, inp.target)
-        out.entities = _entities(out, inp.target)
-        return out
+            out = UrlscanOutput(source=self.name, total=raw_total, hits=hits)
+            out.summary_markdown = _summary(out, inp.target)
+            out.entities = _entities(out, inp.target)
+            return out
 
 
 def _summary(out: UrlscanOutput, target: str) -> str:

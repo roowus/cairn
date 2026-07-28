@@ -13,7 +13,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
-from cairn.execution.browser_http import make_browser_client
+from cairn.execution.http_util import http_client
 from cairn.execution.social_probe import DEFAULT_PLATFORMS, probe_many
 
 
@@ -53,17 +53,8 @@ class UsernameCheckPlugin(BasePlugin[UsernameCheckInput, UsernameCheckOutput]):
 
     async def run(self, inp: UsernameCheckInput, ctx: PluginContext) -> UsernameCheckOutput:
         username = inp.target.strip().lstrip("@")
-        owns_client = ctx.http is None
-        http = ctx.http or make_browser_client(
-            timeout=max(ctx.timeout, 30.0),
-            proxy=ctx.proxy,
-            user_agent=ctx.user_agent if "Mozilla" in (ctx.user_agent or "") else None,
-        )
-        try:
+        async with http_client(ctx, timeout=max(ctx.timeout, 30.0)) as http:
             results = await probe_many(http, username, inp.platforms or list(DEFAULT_PLATFORMS))
-        finally:
-            if owns_client:
-                await http.aclose()
 
         found, missing, unknown, errors = [], [], [], []
         lines = [

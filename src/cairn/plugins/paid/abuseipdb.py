@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from cairn.execution.base import (
     BasePlugin,
     CostSpec,
@@ -14,6 +12,7 @@ from cairn.execution.base import (
     PluginInput,
     PluginOutput,
 )
+from cairn.execution.http_util import http_client
 
 
 class AbuseIpdbInput(PluginInput):
@@ -44,29 +43,27 @@ class AbuseIpdbPlugin(BasePlugin[AbuseIpdbInput, AbuseIpdbOutput]):
 
     async def run(self, inp: AbuseIpdbInput, ctx: PluginContext) -> AbuseIpdbOutput:
         key = ctx.key("abuseipdb") or ""
-        http = ctx.http or httpx.AsyncClient(
-            timeout=ctx.timeout, proxy=ctx.proxy, follow_redirects=True
-        )
-        r = await http.get(
-            "https://api.abuseipdb.com/api/v2/check",
-            params={"ipAddress": inp.target, "maxAgeInDays": inp.max_age_days},
-            headers={"Key": key, "Accept": "application/json"},
-        )
-        r.raise_for_status()
-        d: dict[str, Any] = r.json().get("data", {})
-        score = d.get("abuseConfidenceScore", 0)
-        summary = (
-            f"**{inp.target}** — AbuseIPDB\n"
-            f"- Abuse score: {score}/100\n"
-            f"- Reports: {d.get('totalReports', 0)}\n"
-            f"- Country: {d.get('countryCode', 'unknown')}  ISP: {d.get('isp', 'unknown')}\n"
-        )
-        return AbuseIpdbOutput(
-            source=self.name,
-            summary_markdown=summary,
-            score=score,
-            country=d.get("countryCode"),
-            isp=d.get("isp"),
-            total_reports=d.get("totalReports", 0),
-            entities=[Entity(type="ip", value=inp.target, attrs={"abuse_score": score})],
-        )
+        async with http_client(ctx) as http:
+            r = await http.get(
+                "https://api.abuseipdb.com/api/v2/check",
+                params={"ipAddress": inp.target, "maxAgeInDays": inp.max_age_days},
+                headers={"Key": key, "Accept": "application/json"},
+            )
+            r.raise_for_status()
+            d: dict[str, Any] = r.json().get("data", {})
+            score = d.get("abuseConfidenceScore", 0)
+            summary = (
+                f"**{inp.target}** — AbuseIPDB\n"
+                f"- Abuse score: {score}/100\n"
+                f"- Reports: {d.get('totalReports', 0)}\n"
+                f"- Country: {d.get('countryCode', 'unknown')}  ISP: {d.get('isp', 'unknown')}\n"
+            )
+            return AbuseIpdbOutput(
+                source=self.name,
+                summary_markdown=summary,
+                score=score,
+                country=d.get("countryCode"),
+                isp=d.get("isp"),
+                total_reports=d.get("totalReports", 0),
+                entities=[Entity(type="ip", value=inp.target, attrs={"abuse_score": score})],
+            )
