@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import sys
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -10,6 +13,7 @@ from rich.table import Table
 from cairn import __version__
 from cairn.core.logging import setup_logging
 from cairn.interfaces.interrupt import TurnCancelled, run_cancellable
+from cairn.interfaces.tui.input import BasicInput, PromptKitInput
 
 HELP = """\
 [bold]Cairn REPL[/bold] — describe what to investigate in plain English.
@@ -222,8 +226,12 @@ def _run_turn(console: Console, loop: object, session: object, prompt: str) -> N
         console.print(f"[red]Error:[/red] {exc}")
 
 
-def repl() -> None:
-    """Launch the interactive REPL (synchronous entry point)."""
+def repl(*, basic: bool = False) -> None:
+    """Launch the interactive REPL (synchronous entry point).
+
+    ``basic`` (or ``CAIRN_BASIC_INPUT=1``, or a non-TTY stdin) selects the
+    pre-U2 Rich ``console.input`` backend instead of prompt_toolkit.
+    """
     import asyncio
 
     setup_logging()
@@ -239,6 +247,18 @@ def repl() -> None:
 
     model = session.model_name
     skills = discover_skills()
+    # Input backend: prompt_toolkit on a TTY (history + completion + emacs keys);
+    # else Rich console.input (pre-U2 behavior, also used for --basic / non-TTY).
+    use_basic = basic or os.environ.get("CAIRN_BASIC_INPUT", "").strip() in (
+        "1",
+        "true",
+        "yes",
+    )
+    input_ui = (
+        BasicInput()
+        if (use_basic or not sys.stdin.isatty())
+        else PromptKitInput(skills=skills)
+    )
     _banner(console, session.tool_count, model, getattr(session.settings, "mode", "investigate"))
 
     loop = asyncio.new_event_loop()
@@ -248,7 +268,7 @@ def repl() -> None:
     try:
         while True:
             try:
-                line = console.input("[bold cyan]cairn>[/bold cyan] ").strip()
+                line = input_ui.read_prompt(console).strip()
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[dim]bye.[/dim]")
                 break

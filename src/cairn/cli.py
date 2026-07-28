@@ -49,16 +49,27 @@ def _main(
         is_eager=True,
         help="Show version and exit.",
     ),
+    basic: bool = typer.Option(
+        False,
+        "--basic",
+        help="Use basic line input (no prompt_toolkit history/completion).",
+    ),
 ) -> None:
     """Cairn — agentic OSINT in your terminal."""
     if ctx.invoked_subcommand is None:
-        _repl()
+        _repl(basic=basic)
 
 
 @app.command("repl")
-def repl_cmd() -> None:
+def repl_cmd(
+    basic: bool = typer.Option(
+        False,
+        "--basic",
+        help="Use basic line input (no prompt_toolkit history/completion).",
+    ),
+) -> None:
     """Launch the interactive REPL."""
-    _repl()
+    _repl(basic=basic)
 
 
 @app.command("search")
