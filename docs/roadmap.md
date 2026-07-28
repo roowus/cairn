@@ -27,7 +27,9 @@ anti-injection layer* (every result still wrapped in
   (tested in isolation; not wired into the live turn) (181 tests).
 - ✅ Phase 5 — adversarial review DONE (6-lens / 3-skeptic workflow; **5 defects
   fixed, 2 major** — incl. a Layer-B `wrap_untrusted` attribute-bypass closed
-  via `_attr_escape`). Real-model `CAIRN_MODE=challenge` smoke still ⏳. Repo
+  via `_attr_escape`). Real-model `CAIRN_MODE=challenge` smoke **partial** —
+  `read_file` verified end-to-end on grok-4.5 (2026-07-28);
+  `run_command`/`scrub_env`/Esc-cancel prompts still pending. Repo
   total now **187 tests, ruff clean** (the Phase-6 theme foundation added 3 on
   top of the 184 at review).
 

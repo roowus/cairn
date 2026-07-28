@@ -8,7 +8,7 @@
 > no further source modified. Derived from the verbatim
 > Phase 4–6 spec in [`backburner.md`](backburner.md) § "Deferred — UI overhaul
 > Phases 4–6", re-grounded against the **current** tree (re-read July 2026;
-> 184 tests, `ruff` clean). Phases 1–3 (stream + tool cards + statusline) and
+> **187 tests**, `ruff` clean). Phases 1–3 (stream + tool cards + statusline) and
 > the Phase-4-agentic subset (`/workspace` command + `RichPermissionUI` seam)
 > are **shipped** and explicitly excluded here.
 >
@@ -47,7 +47,8 @@
 ## 1. Shared-file collision matrix (phase × file)
 
 Files most likely to be touched by >one phase or by the in-progress agentic
-smoke (`docs/architecture/agentic-file-control.md` Phase 5 smoke = ⏳ pending).
+smoke (`docs/architecture/agentic-file-control.md` Phase 5 smoke = **partial** —
+`read_file` verified on grok-4.5; `run_command`/`scrub_env`/Esc-cancel pending).
 
 | File | Phase 4 | Phase 5 | Phase 6 | Agentic smoke (concurrent) |
 |---|---|---|---|---|
@@ -623,7 +624,8 @@ sequence LAST).
 ## 5. Interactions with the in-progress agentic file-control work
 
 The agentic track (`docs/architecture/agentic-file-control.md`) has Phases
-1–4 shipped and Phase 5 (smoke) ⏳ pending. The interactions to flag:
+1–4 shipped and Phase 5 smoke **partial** (`read_file` verified on grok-4.5;
+`run_command`/`scrub_env`/Esc-cancel pending). The interactions to flag:
 
 1. **`!`/`!!` vs `run_command` (Layer distinction).** `run_command`
    ([`run_command.py`](../src/cairn/plugins/agentic/run_command.py)) is a

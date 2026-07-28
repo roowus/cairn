@@ -17,7 +17,7 @@ See [how the investigator loop works](docs/architecture/investigator-loop.md).
 Phase 1 (MVP): interactive REPL + headless CLI, plugin registry, PydanticAI
 agent, SQLite audit + NetworkX graph, **20 OSINT plugins** (free-first), live
 progress output, and an entity-extraction pivot layer. STIX output, graph/vector
-DBs, multi-agent, MCP, skills, and REST are designed behind clean seams — see
+DBs, multi-agent, MCP, and REST are designed behind clean seams — see
 [docs/roadmap.md](docs/roadmap.md) and
 [docs/decisions/0004](docs/decisions/0004-defer-kuzu-qdrant-stix-mcp.md).
 

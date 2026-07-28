@@ -166,7 +166,7 @@ The brain calls `run_command` to invoke any of them; if one is missing it calls
 | 2 — Agentic plugins | `read_file` / `list_files` / `write_file` / `download_url` / `run_command` + tests (boundary, scrub, wrap-back, exit-code-as-data) | ✅ shipped (165 tests, ruff clean) |
 | 3 — System prompt + allowlist | `build_system_prompt(settings)` mode-gated; two-tier `CliToolSpec`; `repl` bootstrap filter; `security.md` section; tests | ✅ shipped (174 tests) |
 | 4 — UI track | `/workspace` (`/files`) REPL command; `permission_panel.py` (`RichPermissionUI` v2 seam, tested, not wired into the live turn) | ✅ shipped (181 tests) |
-| 5 — Adversarial review + smoke | 6-lens workflow review (3-skeptic panels); real-model `CAIRN_MODE=challenge` smoke | ✅ review (5 defects fixed, 184 tests) — ⏳ smoke |
+| 5 — Adversarial review + smoke | 6-lens workflow review (3-skeptic panels); real-model `CAIRN_MODE=challenge` smoke | ✅ review done (5 defects fixed, 184 at review); smoke **partial** — `read_file` ✓ on grok-4.5, rest pending |
 
 ## Phase 5 — adversarial review: findings & fixes
 
@@ -199,7 +199,9 @@ are load-bearing:
 
 Only the `wrap_untrusted` finding was a live Layer-B escape (now closed); the
 rest hardened secret-hygiene and consistency. The remaining Phase-5 half is the
-real-model `CAIRN_MODE=challenge` smoke.
+real-model `CAIRN_MODE=challenge` smoke — now **partial**: `read_file` verified
+end-to-end on grok-4.5 (2026-07-28); `run_command` exit-as-data / `scrub_env` /
+Esc-cancel prompts still pending.
 
 ## File map
 
