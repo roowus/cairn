@@ -273,11 +273,19 @@ so entities are ambient — the brain doesn't spend a turn extracting. The
 ## Verified state (as of this writing)
 
 - **28 plugins** including `username_check`, `install_cli`, identity/infra/web/paid/agentic.
-- Unit suite: config, pi-auth, model catalog, build_model, cli_tools, interrupt,
-  browser_http, social_probe, github commit mining, tool adapter, layering, …
+- Unit suite green (`pytest -m "not network"`); ruff clean on main after bug-hunt
+  PRs #20–#24 and follow-up #30.
 - Global install: `make install-global` → `cairn` on `PATH`.
 - Default LLM: xAI Grok via pi OAuth; `/model glm` for Z.AI.
 - Live checks: first-party Instagram/GitHub/Threads for real handles; GitHub
   commit email + YT embed mining; Sherlock imginn false-negative understood.
 - External CLIs auto-install; long CLI timeouts fixed (240s / 180s).
-- Docs: [configuration.md](configuration.md), [social-probing.md](social-probing.md).
+- Recent hard-stop / recon hygiene (merged): holehe domain-shaped `[+]` parser;
+  crtsh honest errors + label-boundary subdomains; urlscan on-target filter;
+  ripestat network-info ASN path; `default_factory` tool/CLI signatures;
+  nested Wayback URL userinfo redaction; `download_url` 25 MiB stream cap;
+  shared browser `http_client` helper (no leaked bare clients).
+- Open product gap: investigate mode still registers agentic tools (#15); residual
+  summary userinfo paths (#32); github email→local-part login (#31).
+- Docs: [configuration.md](configuration.md), [social-probing.md](social-probing.md),
+  [security.md](architecture/security.md), [agentic-file-control.md](architecture/agentic-file-control.md).

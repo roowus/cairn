@@ -37,10 +37,10 @@ and any quota: `free`, `50/day`, `2k/mo`, `credits`, `paid`, … shown in the
 |---|---|---|---|
 | `generate_dorks` | 🆓 | name/handle | Offline Google-dork recipes (`site:` per platform, `filetype:pdf`, `resume OR cv`, `leaked OR breach`) as query strings + ready-to-open URLs. Feed into `web_search`. |
 | `web_search` | 🆓 / 🔑 | query (dorks ok) | Live search. **Brave is the reliable path** (`CAIRN_BRAVE_KEY`); no-key DuckDuckGo fallback returns an actionable "blocked" message when anti-bot hits. |
-| `github` | 🆓 / 🔑 | login or GitHub URL | REST profile + repos + **commit-mined emails** (profile `email` is often null — mine `gh-pages`/default commits) + YouTube embeds from README/`index.md` + avatar URL. 60/hr free → 5k/hr with `CAIRN_GITHUB_KEY` (**recommended** for commit mining). Details: [social-probing.md](social-probing.md#5-tools-when-to-use-which). |
+| `github` | 🆓 / 🔑 | login or GitHub URL (not a bare email) | REST profile + repos + **commit-mined emails** (profile `email` is often null — mine `gh-pages`/default commits) + YouTube embeds from README/`index.md` + avatar URL. Accepts bare login, `github.com/…` URLs, and `git@github.com:user/repo`. Email-shaped inputs are not ideal (local-part may be tried as a login — see issue #31). 60/hr free → 5k/hr with `CAIRN_GITHUB_KEY` (**recommended** for commit mining). Details: [social-probing.md](social-probing.md#5-tools-when-to-use-which). |
 | `whois_rdap` | 🆓 | domain | RDAP registrar/dates/nameservers/status. |
 | `shodan_internetdb` | 🆓 | IP | Shodan InternetDB: hostnames, ports, vulns, tags (no key). |
-| `holehe` | 🆓 | email | Which websites/services an email is registered on (wraps the `holehe` CLI). **Auto-installs** if missing. Full run often takes **1-2 min** (own process timeout, not the 30s HTTP default). |
+| `holehe` | 🆓 | email | Which websites/services an email is registered on (wraps the `holehe` CLI). **Auto-installs** if missing. Full run often takes **1-2 min** (own process timeout, not the 30s HTTP default). Parser matches only **domain-shaped** `[+] host.tld` lines so the v1.61 legend (`[+] Email used, …`) is never reported as a platform. |
 | `username_check` | 🆓 | username | **Preferred** major-platform presence check via **first-party** URLs (Instagram, GitHub, Reddit, YouTube, TikTok, X, Threads). Browser-like HTTP + empty-shell retries. Not Sherlock mirrors. |
 | `sherlock` | 🆓 | username | Wide 300+ site sweep via `sherlock` CLI, then **first-party cross-check** of major platforms (fixes IG/imginn false negatives). Auto-installs. 1-3 min. Prefer `username_check` when you only need major sites. |
 | `install_cli` | 🆓 | tool name or `list` | Repair allowlisted CLIs (`sherlock`/`holehe`). Usually unnecessary — they auto-install. |
@@ -53,11 +53,11 @@ are rate/quality boosts.
 | Plugin | Cost | `target` | Purpose |
 |---|---|---|---|
 | `dns_lookup` | 🆓 | domain | DNS records (A default; `record_type` configurable). Uses `dnspython`. |
-| `crtsh` | 🆓 | domain | Certificate-transparency subdomain enumeration. |
-| `wayback_cdx` | 🆓 | URL/domain | Wayback Machine CDX snapshot index (earliest/latest). |
+| `crtsh` | 🆓 | domain | Certificate-transparency subdomain enumeration. Distinguishes HTTP/timeout/JSON failures from true empty results; subdomain filter uses a **label boundary** (`*.base`, not string suffix) so `notexample.com` is not treated as under `example.com`. CT queries use ≥60s timeout headroom. |
+| `wayback_cdx` | 🆓 | URL/domain | Wayback Machine CDX snapshot index (earliest/latest). Credentialed historical URLs (`user:pass@host`, including nested archive wrappers) are redacted before summary/entities. |
 | `ripestat` | 🆓 | IP / prefix / ASN | ASN, holder, prefix, country via RIPEstat. |
 | `hackertarget` | 🆓 ⏳ | IP or domain | hostsearch / reverseip / whois / dnslookup. Auto-picks by target type. **Off by default** — free tier is ~50/day, so it's `daily_limited`; opt in with `CAIRN_ALLOW_DAILY_LIMITED=1`. |
-| `urlscan` | 🆓 / 🔑 | IP or domain | urlscan.io community results (page URL/domain/IP/title/server). Higher limit with `CAIRN_URLSCAN_KEY`. |
+| `urlscan` | 🆓 / 🔑 | IP or domain | urlscan.io community results (page URL/domain/IP/title/server). Hits filtered to **on-target** domain/IP (or subdomains); raw index `total` is not claimed as on-target. Higher limit with `CAIRN_URLSCAN_KEY`. |
 
 ## Web / content (`plugins/web/`)
 
@@ -65,8 +65,8 @@ are rate/quality boosts.
 |---|---|---|---|
 | `scrape_url` | 🆓 | URL | Fetch a page → title, visible text, links, images (incl. `og:image` profile pic). httpx+BeautifulSoup default; renders JS via **crawl4ai** when installed. Mines entities for pivoting. |
 | `web_search` | 🆓 / 🔑 | query | Live search. **Reliable path = Brave** (`CAIRN_BRAVE_KEY`, free 2k/mo). No-key fallback is DuckDuckGo, which increasingly returns an anti-bot 202 page — when blocked, the tool returns no results *with an actionable Brave message* (never silent, never fabricated). |
-| `wayback_fetch` | 🆓 | URL | Fetch an archived snapshot's body from the Wayback Machine (`timestamp` optional). |
-| `common_crawl` | 🆓 | URL | Common Crawl index matches for a URL. |
+| `wayback_fetch` | 🆓 | URL | Fetch an archived snapshot's body from the Wayback Machine (`timestamp` optional). Archived URL in summary/entities is userinfo-redacted (including nested playback forms). |
+| `common_crawl` | 🆓 | domain/URL | Common Crawl index matches. Bare domains normalize to `host/*`; HTTP errors vs empty results are distinguished. |
 
 **Reality check (2026):** free no-key web search is blocked by anti-bot on
 DuckDuckGo / Google / Bing, and SearXNG public instances are unreliable. Jina
@@ -91,6 +91,22 @@ write-up: [social-probing.md](social-probing.md).
 
 **CLI timeouts:** Sherlock overall default **240s**, holehe **180s** (not the
 30s HTTP `ctx.timeout`). Holehe uses `--only-used` (not `--only-known`).
+
+## Agentic (`plugins/agentic/`)
+
+Workspace file/exec tools for challenges and local artifact analysis. They are
+**always registered** today (both `investigate` and `challenge` mode) — mode only
+swaps system-prompt stance ([issue #15](https://github.com/roowus/cairn/issues/15)).
+Every result is still wrapped in `<untrusted_external_data>`. See
+[agentic file & tool control](architecture/agentic-file-control.md).
+
+| Plugin | Cost | `target` | Purpose |
+|---|---|---|---|
+| `read_file` | 🆓 | path | Read a workspace file (capped); mines IOC entities. |
+| `list_files` | 🆓 | path (`.` = cwd) | Depth-limited workspace tree with sizes. |
+| `write_file` | 🆓 | path | Create/overwrite/append text in the workspace. |
+| `download_url` | 🆓 | http(s) URL | Stream raw bytes into the workspace; **25 MiB default cap** (`max_bytes`), Content-Length pre-check, sha256. Not for HTML text — use `scrape_url`. |
+| `run_command` | 🆓 | shell command | `bash -c` in the workspace (array args, scrubbed env). Exit code is data. Policy sandbox only — not OS containment. |
 
 ## Keyed / paid-tier (`plugins/paid/`)
 

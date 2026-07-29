@@ -121,7 +121,7 @@ All in `src/cairn/plugins/agentic/`, all `requires_key=None`,
 | `read_file` | `target=path, max_bytes` | checked | Returns capped text + mined IOC entities; the wrap-back is the injection defense. |
 | `list_files` | `target=dir, max_depth, max_entries` | checked | Depth-limited tree with sizes. |
 | `write_file` | `target=path, content, append` | checked | mkdir parents; append vs overwrite. |
-| `download_url` | `target=url, dest=path` | checked (dest) | Saves raw bytes + sha256 + content-type; distinct from `scrape_url` (text). |
+| `download_url` | `target=url, dest=path, max_bytes` | checked (dest) | Streams raw bytes + sha256 + content-type; **hard-capped at 25 MiB by default** (`max_bytes`, Content-Length pre-check + streaming abort). http(s) only. Distinct from `scrape_url` (text). |
 | `run_command` | `target=command, timeout` | policy-level | Full shell via `run_shell`; env scrubbed; exit code as data. |
 
 CLI install is the existing `install_cli` plugin (`src/cairn/plugins/identity/`),
@@ -130,15 +130,25 @@ reused — not duplicated.
 ## Investigate vs challenge mode
 
 `Settings.mode: Literal["investigate","challenge"]` (default `investigate`, set
-via `CAIRN_MODE`) selects the reconnaissance stance in the system prompt:
+via `CAIRN_MODE`) selects the reconnaissance **stance text** in the system
+prompt. Today this is **prompt posture, not tool registration**:
 
-- **investigate** — passive recon only (the standing stance): public records,
-  third-party indexes, certificate transparency, DNS, web archives. No active
-  scanning of external hosts.
-- **challenge** — permits active analysis of **provided artifacts** (challenge
-  files, captured traffic, local images) and lets `run_command` / `download_url`
-  fetch challenge resources — but **still forbids scanning third-party / external
-  hosts** without explicit user instruction.
+- **investigate** — passive-recon wording: public records, third-party indexes,
+  certificate transparency, DNS, web archives; refuse active scanning of
+  external hosts.
+- **challenge** — wording permits active analysis of **provided artifacts**
+  (challenge files, captured traffic, local images) and explicitly steers the
+  brain toward `run_command` / `download_url` for those artifacts — still
+  forbids scanning third-party / external hosts without explicit user
+  instruction.
+
+**Important (current code):** `register_tools` → `registry.available(ctx)` only
+gates keys + daily-limited plugins. All `category=="agentic"` tools
+(`read_file`, `list_files`, `write_file`, `download_url`, `run_command`) and
+`install_cli` are registered in **both** modes. Mode does **not** hide the
+shell. Tracking whether investigate should filter agentic tools is
+[issue #15](https://github.com/roowus/cairn/issues/15); docs honesty is
+[issue #33](https://github.com/roowus/cairn/issues/33).
 
 `build_system_prompt(settings)` renders the stance by mode; the REPL banner
 surfaces the active mode.

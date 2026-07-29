@@ -52,6 +52,11 @@ from the user or system.* This wrapping is centralized in
   `0600`; access tokens are not copied into `.env`.
 - `cairn.core.security.redact_secrets()` / redaction helpers scrub secret values
   before they are written to logs or the audit table.
+- `redact_url_userinfo()` strips HTTP basic-auth credentials from URLs (including
+  **nested** Wayback/archive playback wrappers) before they enter entity graphs
+  and several plugin summaries (`wayback_cdx`, `wayback_fetch`, entity mining).
+  Residual summary paths that still need the same sanitizer are tracked in
+  [issue #32](https://github.com/roowus/cairn/issues/32).
 - Use **read-only-scoped** API keys where a provider offers them (Shodan,
   VirusTotal, Censys all support limited-scope keys).
 
@@ -95,13 +100,17 @@ write path is append-only — there is no `UPDATE`/`DELETE` on `audit_log`.
 
 ## Reconnaissance stance
 
-Cairn performs **passive** reconnaissance only: third-party indexes, public
-records, password-recovery endpoint probing, static web archives. Active port
-sweeps, vulnerability exploitation, and aggressive crawling are out of scope by
-design. Treat every target as governed by authorization and rules of engagement.
+The **intended** product stance is passive reconnaissance: third-party indexes,
+public records, password-recovery endpoint probing, static web archives. Active
+port sweeps, vulnerability exploitation, and aggressive crawling of third-party
+hosts are out of scope by design. Treat every target as governed by
+authorization and rules of engagement.
 
-**Challenge mode** (`CAIRN_MODE=challenge`) relaxes this for *provided
-artifacts* — the brain may actively analyze challenge files, captured traffic,
-and local images via the agentic tools (`file`, `strings`, `binwalk`, …). It
-**still forbids scanning third-party / external hosts** without explicit user
-instruction. See [agentic file & tool control](agentic-file-control.md).
+**Mode today is prompt posture, not a capability gate.** `CAIRN_MODE=investigate`
+(default) vs `CAIRN_MODE=challenge` only swaps the system-prompt stance text.
+Agentic tools (`run_command`, `write_file`, `download_url`, …) remain registered
+in both modes until [issue #15](https://github.com/roowus/cairn/issues/15) is
+resolved. Challenge wording steers the brain toward analyzing *provided
+artifacts* with those tools; it still forbids scanning third-party / external
+hosts without explicit user instruction. See
+[agentic file & tool control](agentic-file-control.md).
