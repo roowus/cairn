@@ -33,6 +33,24 @@ anti-injection layer* (every result still wrapped in
   total now **187 tests, ruff clean** (the Phase-6 theme foundation added 3 on
   top of the 184 at review).
 
+## UI overhaul — the live "function like pi" REPL — ✅ DONE
+
+The REPL is now a live terminal app: the answer streams in place, tool calls
+animate as cards keyed by `tool_call_id`, a header/statusline persists, and each
+turn seals into scrollback as a structured block (header + boxed tools + boxed
+answer + footer) — no vanishing frames, no alt-screen. Built as U1–U6:
+
+- ✅ **U1** zoned chrome · **U2** prompt_toolkit input (history + completion) ·
+  **U3** collapsible thinking + live CLI stdout into cards (per-call `ContextVar`
+  bridge, parallel-safe under concurrent tool execution) · **U4** `!`/`!!` shell
+  + `@file` inline (user-trusted) · **U5** centralized theme tokens
+  (render-identical) · **U6** JSONL sessions + `/sessions` `/resume` `/compact`
+  `/fork`.
+
+Invariant preserved: Rich `Live` and prompt_toolkit never run concurrently. The
+multi-agent `/spawn` + laned view remain (tracked in #2, on the SessionPool
+backend). See [UI overhaul](architecture/ui-overhaul.md). **276 tests, ruff clean.**
+
 ## 1. The investigative brain (system prompt rewrite) — ✅ DONE
 
 `reasoning/system_prompt.py` is now the **investigator brain** that drives the
