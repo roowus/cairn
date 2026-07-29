@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING
 from rich.console import Console
 from rich.panel import Panel
 
+from cairn.interfaces.tui.theme import theme
+
 if TYPE_CHECKING:
     from cairn.execution.workspace import PermissionRequest
 
@@ -38,7 +40,7 @@ def render_permission_request(decl: PermissionRequest) -> Panel:
         f"[dim]{decl.reason}[/dim]\n\n"
         f"Allow this once? [bold]y/N[/bold]",
         title="[yellow]permission request[/yellow]",
-        border_style="yellow",
+        border_style=theme.warn,
     )
 
 

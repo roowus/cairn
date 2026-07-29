@@ -32,6 +32,7 @@ from cairn.interfaces.tui.cards import ToolCard
 from cairn.interfaces.tui.header import render_footer, render_header
 from cairn.interfaces.tui.markdown_stream import MarkdownStream
 from cairn.interfaces.tui.statusline import render_statusline
+from cairn.interfaces.tui.theme import theme
 from cairn.interfaces.tui.thinking_stream import ThinkingStream
 from cairn.orchestration.events import (
     TextDelta,
@@ -144,11 +145,11 @@ class _Composer:
                         Group(*(c.render() for c in self.cards.values())),
                         title="tools",
                         title_align="left",
-                        border_style="cyan",
+                        border_style=theme.border,
                     )
                 )
             zones.append(
-                Panel(body, title="answer", title_align="left", border_style="cyan")
+                Panel(body, title="answer", title_align="left", border_style=theme.border)
             )
             zones.append(render_footer())
             return Group(*zones)
@@ -163,7 +164,7 @@ class _Composer:
         if not self.md.empty:
             body: RenderableType = self.md.render()
         elif not self.cards:
-            body = Text("⠋ thinking…", style="dim")
+            body = Text("⠋ thinking…", style=theme.muted)
         else:
             body = Text("")  # tool cards (some running) provide the activity
         return self._frame(body)

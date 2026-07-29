@@ -27,6 +27,7 @@ from rich.console import Group, RenderableType
 from rich.spinner import Spinner
 from rich.text import Text
 
+from cairn.interfaces.tui.theme import theme
 from cairn.orchestration.progress import excerpt
 
 __all__ = ["ToolCard"]
@@ -96,26 +97,26 @@ class ToolCard:
         if self.state == _RUNNING:
             if self._spinner is None:
                 self._spinner = Spinner("dots")
-            label = Text(f"  {self.tool_name}", style="cyan")
+            label = Text(f"  {self.tool_name}", style=theme.accent)
             if self.target:
-                label.append(f" ({self.target})", style="dim")
+                label.append(f" ({self.target})", style=theme.muted)
             self._spinner.text = label  # stable instance → smooth animation
             head: RenderableType = self._spinner
         else:
             line = Text()
             if self.state == _DONE:
-                mark, mstyle = ("✓", "green") if not self.is_error else ("✗", "red")
+                mark, mstyle = ("✓", theme.ok) if not self.is_error else ("✗", theme.err)
                 line.append(f"  {mark} ", style=mstyle)
-                line.append(self.tool_name, style="cyan")
+                line.append(self.tool_name, style=theme.accent)
                 if self.target:
-                    line.append(f" ({self.target})", style="dim")
+                    line.append(f" ({self.target})", style=theme.muted)
                 if self.excerpt:
-                    line.append(f" — {self.excerpt}", style="dim")
+                    line.append(f" — {self.excerpt}", style=theme.muted)
             else:  # pending — model composing the call
-                line.append("  ▸ ", style="bold cyan")
-                line.append(self.tool_name, style="cyan")
+                line.append("  ▸ ", style=theme.bold_accent)
+                line.append(self.tool_name, style=theme.accent)
             head = line
         if self.body:
             # Streamed stdout tail, shown under the status line while/after the run.
-            return Group(head, *(Text(f"    │ {ln}", style="dim") for ln in self.body))
+            return Group(head, *(Text(f"    │ {ln}", style=theme.muted) for ln in self.body))
         return head

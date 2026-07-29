@@ -6,10 +6,10 @@ light/dark theme or accessibility tweak changes one place, not a dozen. Tokens
 are :class:`rich.style.Style` objects on a frozen :class:`Theme`; the
 module-level :data:`theme` singleton is what callers import.
 
-Foundation only (Phase 6 Step 6.1). Adopting it at the existing literal sites is
-Step 6.2 — a mechanical, render-identical swap sequenced separately so this
-introduction stays reviewable on its own. Alternate themes (light/dark) are
-deferred; v1 ships exactly this palette.
+Adopted (UI overhaul U5) across the Text-based renderers — cards, statusline,
+live_turn (panel borders), header, thinking_stream — so a future light/dark theme
+or accessibility tweak changes one place. REPL command/banner output still uses
+inline color names (markup strings); alternate themes remain deferred.
 """
 
 from __future__ import annotations

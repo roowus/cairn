@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 from rich.text import Text
 
+from cairn.interfaces.tui.theme import theme
+
 if TYPE_CHECKING:
     from cairn.orchestration.session import Session
 
@@ -49,29 +51,29 @@ def render_statusline(session: Session, *, hints: bool = False) -> Text:
     :attr:`Session.llm_usage` and :attr:`Session.usage` but never writes them.
     """
     line = Text()
-    line.append(session.model_name or "cairn", style="bold cyan")
+    line.append(session.model_name or "cairn", style=theme.bold_accent)
 
     llm = getattr(session, "llm_usage", None)
     if llm is not None and (llm.input_tokens or llm.output_tokens):
-        line.append(" · ", style="dim")
+        line.append(" · ", style=theme.muted)
         tokens = f"↑{_compact(llm.input_tokens)} ↓{_compact(llm.output_tokens)} tok"
-        line.append(tokens, style="dim")
+        line.append(tokens, style=theme.muted)
 
     usage = getattr(session, "usage", None)
     if usage is not None:
         calls = usage.total_calls()
         if calls:
-            line.append(" · ", style="dim")
-            line.append(f"{_compact(calls)} tool{'s' if calls != 1 else ''}", style="dim")
+            line.append(" · ", style=theme.muted)
+            line.append(f"{_compact(calls)} tool{'s' if calls != 1 else ''}", style=theme.muted)
         paid = usage.total_paid_consumed()
         if paid > 0:
             unit = next((s.unit for s in usage.sources() if s.paid), "credits")
-            line.append(" · ", style="dim")
-            line.append(f"{_compact(paid)} {unit}", style="magenta")
+            line.append(" · ", style=theme.muted)
+            line.append(f"{_compact(paid)} {unit}", style=theme.paid)
 
     if hints:
-        line.append(" · ", style="dim")
-        line.append("/help", style="cyan")
-        line.append(" · ", style="dim")
-        line.append("Esc stop", style="dim")
+        line.append(" · ", style=theme.muted)
+        line.append("/help", style=theme.accent)
+        line.append(" · ", style=theme.muted)
+        line.append("Esc stop", style=theme.muted)
     return line
