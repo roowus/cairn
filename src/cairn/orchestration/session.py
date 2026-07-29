@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -27,10 +28,19 @@ from cairn.orchestration.usage import UsageTracker
 from cairn.reasoning.agent import build_model
 from cairn.reasoning.catalog import apply_profile, current_profile_name, find_profile
 from cairn.reasoning.system_prompt import build_system_prompt
+from cairn.storage import sessions as sessions_store
 from cairn.storage.db import Database
 from cairn.storage.graph_store import NetworkXGraphStore
 
 _log = get_logger("cairn.session")
+
+COMPACTION_PROMPT = (
+    "Summarize this Cairn investigation so far in faithful detail: the target(s) "
+    "investigated, key findings from tool calls (cite which tool/source produced "
+    "each), entities discovered and pivoted on, and open threads / next steps not "
+    "yet taken. Be concise and do not invent details not supported by the tool "
+    "results. This summary will replace the prior conversation as context."
+)
 
 
 class Session:
@@ -44,6 +54,8 @@ class Session:
         model: Any | None = None,
         agent: Agent | None = None,
         db: Database | None = None,
+        session_id: str | None = None,
+        persist: bool = False,
     ) -> None:
         self.settings = settings or load_settings()
         require_llm(self.settings)
@@ -80,6 +92,15 @@ class Session:
         # Most recent turn's final output. Set by iter_turn() on successful
         # completion; left untouched on cancel. ask() returns it after draining.
         self.last_output: str = ""
+        # JSONL session id — decoupled from audit.session_id (which is set by
+        # SessionPool for pooled sessions and stays None on the single-session
+        # path). 12-hex matches SessionPool's format so /sessions lists both.
+        self.session_id = session_id or uuid.uuid4().hex[:12]
+        # When True, each successful turn is appended to sessions_dir()/id.jsonl
+        # (header lazily written on turn 1). Headless/default stays False so a
+        # one-shot `cairn search` writes nothing.
+        self.persist = persist
+        self._header_written = False  # header lazily written on first persisted turn
         _log.info("session ready: %d tool(s), model=%s", self._tools, model_name)
 
     @property
@@ -176,6 +197,20 @@ class Session:
         if run_result is not None:
             self.history = run_result.all_messages()
             self.last_output = run_result.output
+            if self.persist:
+                # Lazily write the header on turn 1, then append just this run's
+                # delta (new_messages() == all_messages()[_new_message_index:]).
+                # Cancelled turns never reach here (CancelledError re-raised
+                # above), so a half-finished turn is never persisted.
+                if not self._header_written:
+                    sessions_store.save_header(
+                        self.session_id,
+                        model=self.model_name,
+                        prompt=prompt,  # iter_turn param == first user prompt on turn 1
+                        turns=len(self.history),
+                    )
+                    self._header_written = True
+                sessions_store.append_turn(self.session_id, run_result.new_messages())
             progress.on_turn_end(run_result.output)
 
     async def ask(self, prompt: str, *, progress: Any = None, model: Any | None = None) -> str:
@@ -189,6 +224,74 @@ class Session:
         async for _ in self.iter_turn(prompt, progress=progress, model=model):
             pass
         return self.last_output
+
+    def load_history(self, session_id: str) -> list[Any]:
+        """Replace history with a persisted session's messages (for /resume).
+
+        Marks the header as already on disk so subsequent turns append rather
+        than rewrite. The session's JSONL id is adopted as the live id so the
+        resumed conversation continues to grow the same file.
+        """
+        self.history = sessions_store.load(session_id)
+        self.session_id = session_id
+        self._header_written = True  # header already on disk → appends, no rewrite
+        return self.history
+
+    async def compact(self) -> tuple[int, int]:
+        """Summarize the conversation; replace history with the summary turn.
+
+        Returns ``(messages_before, messages_after)``. The summarization turn is
+        run with ``persist=False`` so it isn't appended to the live file;
+        afterwards the file is rewritten with just the compacted
+        ``[ModelRequest, ModelResponse]`` pair so on-disk state equals in-memory
+        state.
+
+        Note: with a real model that calls tools mid-summary, ``new_messages()``
+        is longer (request → tool parts → response), and the
+        ``self.history[n_before:]`` slice still captures the whole compaction
+        turn. ``TestModel`` (no tools) yields exactly a 2-message turn.
+        """
+        if not self.history:
+            return (0, 0)
+        n_before = len(self.history)
+        was_persist = self.persist
+        self.persist = False
+        try:
+            await self.ask(COMPACTION_PROMPT)
+        finally:
+            self.persist = was_persist
+        # history is now old_history + [compaction request, compaction response];
+        # keep only the compaction turn as the new durable context. The system
+        # prompt is injected by Agent(system_prompt=...) each run, so it does not
+        # need to be re-added here. A trailing ModelResponse means the next user
+        # prompt appends as a clean ModelRequest (no two consecutive user turns).
+        self.history = self.history[n_before:]
+        if self.persist and self._header_written:
+            sessions_store.save_header(
+                self.session_id,
+                model=self.model_name,
+                prompt=self.history[0].parts[0].content if self.history else "",
+                turns=len(self.history),
+            )
+            sessions_store.append_turn(self.session_id, self.history)
+        return (n_before, len(self.history))
+
+    def fork_snapshot(self) -> str:
+        """Write the current history under a fresh session_id; return the new id.
+
+        Used by ``/fork`` so the user can branch an investigation without
+        disturbing the live session's file. The new file is a complete snapshot
+        (header + every current message), resumable via ``/resume <new_id>``.
+        """
+        new_id = uuid.uuid4().hex[:12]
+        sessions_store.save_header(
+            new_id,
+            model=self.model_name,
+            prompt=(self.history[0].parts[0].content if self.history else ""),
+            turns=len(self.history),
+        )
+        sessions_store.append_turn(new_id, self.history)
+        return new_id
 
     def graph_summary(self) -> str:
         return self.graph.summary()

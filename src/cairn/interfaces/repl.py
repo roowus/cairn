@@ -31,6 +31,10 @@ HELP = """\
   /audit [N]      show the last N audited tool calls
   /usage          show credits/time/quota used this session
   /reset          clear conversation history
+  /sessions       list saved sessions (resumable)
+  /resume ID      load a saved session's history into this one
+  /compact        summarize the conversation to free context
+  /fork           save a copy of this conversation under a new id
   /quit           exit
 
 [bold]Shell & files (user-trusted — not audited, not wrapped):[/bold]
@@ -212,6 +216,73 @@ def _cmd_usage(console: Console, session: object) -> None:
     render_usage(console, sources, title="Session usage")
 
 
+def _cmd_sessions(console: Console) -> None:
+    """List resumable sessions, newest-first."""
+    from cairn.storage import sessions as sessions_store
+
+    metas = sessions_store.list_sessions()
+    if not metas:
+        console.print("[dim]No saved sessions yet.[/dim]")
+        return
+    table = Table(title="Saved sessions", show_header=True, header_style="bold")
+    table.add_column("id", style="cyan")
+    table.add_column("created", style="dim")
+    table.add_column("model", style="green")
+    table.add_column("turns", justify="right")
+    table.add_column("first prompt")
+    for m in metas:
+        table.add_row(
+            m.session_id,
+            m.created_at[5:19],
+            m.model,
+            str(m.turns),
+            (m.prompt[:60] + "…") if len(m.prompt) > 60 else m.prompt,
+        )
+    console.print(table)
+
+
+def _cmd_resume(console: Console, session: object, sid: str) -> None:
+    """Load a saved session's history into the live session."""
+    if not sid:
+        console.print("[yellow]Usage:[/yellow] /resume <id>  (try /sessions)")
+        return
+    try:
+        session.load_history(sid)  # type: ignore[attr-defined]
+    except Exception as exc:
+        console.print(f"[red]Resume failed:[/red] {exc}")
+        return
+    console.print(
+        f"[green]Resumed[/green] [cyan]{sid}[/cyan] "
+        f"[dim]({len(session.history)} messages).[/dim]"  # type: ignore[attr-defined]
+    )
+
+
+def _cmd_compact(console: Console, loop: object, session: object) -> None:
+    """Summarize the conversation; replace history with the summary turn."""
+    console.print("[dim]Compacting conversation…[/dim]")
+    try:
+        before, after = loop.run_until_complete(session.compact())  # type: ignore[attr-defined]
+    except Exception as exc:
+        console.print(f"[red]Compact failed:[/red] {exc}")
+        return
+    if before == 0:
+        console.print("[dim]Nothing to compact yet.[/dim]")
+        return
+    console.print(f"[green]Compacted[/green] {before} messages → {after}.")
+
+
+def _cmd_fork(console: Console, session: object) -> None:
+    """Snapshot the live conversation under a fresh session id."""
+    if not session.history:  # type: ignore[attr-defined]
+        console.print("[dim]Nothing to fork yet.[/dim]")
+        return
+    new_id = session.fork_snapshot()  # type: ignore[attr-defined]
+    console.print(
+        f"[green]Forked[/green] → [cyan]{new_id}[/cyan] "
+        f"[dim](resume with /resume {new_id}).[/dim]"
+    )
+
+
 def _cmd_model(console: Console, session: object, arg: str) -> None:
     """List or switch LLM profiles."""
     from cairn.core.errors import ConfigError
@@ -294,7 +365,7 @@ def repl(*, basic: bool = False) -> None:
     from cairn.skills import discover_skills, render_turn
 
     try:
-        session = Session()
+        session = Session(persist=True)
     except Exception as exc:
         console.print(f"[red]Failed to start session:[/red] {exc}")
         raise typer.Exit(1) from None
@@ -385,6 +456,18 @@ def repl(*, basic: bool = False) -> None:
             if line == "/reset":
                 session.history.clear()
                 console.print("[dim]Conversation history cleared.[/dim]")
+                continue
+            if line == "/sessions":
+                _cmd_sessions(console)
+                continue
+            if line == "/resume" or line.startswith("/resume "):
+                _cmd_resume(console, session, line[len("/resume") :].strip())
+                continue
+            if line == "/compact":
+                _cmd_compact(console, loop, session)
+                continue
+            if line == "/fork":
+                _cmd_fork(console, session)
                 continue
             if line.startswith("/"):
                 head, _, rest = line.partition(" ")

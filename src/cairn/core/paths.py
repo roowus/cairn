@@ -35,6 +35,11 @@ def history_dir() -> Path:
     return config_dir() / "history"
 
 
+def sessions_dir() -> Path:
+    """JSONL conversation snapshots for /resume, /fork, /compact."""
+    return config_dir() / "sessions"
+
+
 def config_toml_path() -> Path:
     return config_dir() / "config.toml"
 
@@ -47,4 +52,5 @@ def ensure_dirs() -> Path:
     """Create the config/history directories. Returns the config dir."""
     cfg = config_dir()
     (cfg / "history").mkdir(parents=True, exist_ok=True)
+    (cfg / "sessions").mkdir(parents=True, exist_ok=True)
     return cfg
