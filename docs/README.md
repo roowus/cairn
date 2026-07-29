@@ -13,6 +13,7 @@
 - **[Plugin Reference](plugin-reference.md)** — every plugin (cost, target, purpose, entities).
 - **[Roadmap](roadmap.md)** — what's next: cookie social channels, reverse image, video, MCP.
 - **[Strategy — the moat](strategy.md)** — the product thesis (4 pillars): why Cairn isn't just "Claude Code + OSINT MCPs".
+- **[Known limitations](known-limitations.md)** — holehe's rate-limit ceiling, the GLM headless gap, Grok billing, parallel-contribution PR hygiene.
 - **Backlog** is [GitHub issues](https://github.com/roowus/cairn/issues) (`enhancement` / `bug` / `priority` / `moat` / `decision-needed`), not a doc.
 
 ## Architecture
@@ -20,6 +21,8 @@
 - **[Overview](architecture/overview.md)** — the three-layer model and dependency rules.
 - **[Security model](architecture/security.md)** — hard-stop execution, injection defenses, audit log, allowlisted installs.
 - **[Agentic file & tool control](architecture/agentic-file-control.md)** — Claude Code parity (read/write/download/shell/install) via a relaxed *execution* layer that preserves the *anti-injection* layer; investigate vs challenge mode.
+- **[UI overhaul](architecture/ui-overhaul.md)** — the live REPL: zoned chrome, prompt_toolkit input, collapsible thinking + live stdout, `!`/`!!`/`@file`, theme tokens, JSONL sessions (U1–U6).
+- **[Parallel sessions](architecture/parallel-sessions.md)** — the SessionPool backend (N concurrent sessions, shared audit) for issue #2.
 - **[Usage & cost reporting](architecture/usage-and-cost.md)** — credits/time/quota per source (`/usage`, `cairn usage`, the cost column).
 - **[Plugin contract](architecture/plugin-contract.md)** — how plugins are defined and discovered.
 - **[Authoring a plugin](plugin-authoring.md)** — step-by-step.
