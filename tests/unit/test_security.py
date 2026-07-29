@@ -68,6 +68,25 @@ def test_redact_url_userinfo_strips_credentials():
     )
 
 
+def test_redact_url_userinfo_nested_wayback_wrapper():
+    nested = (
+        "http://web.archive.org/web/20131008213727/"
+        "http://user:pass@example.com/"
+    )
+    out = redact_url_userinfo(nested)
+    assert "user:pass@" not in out
+    assert out == (
+        "http://web.archive.org/web/20131008213727/http://example.com/"
+    )
+
+
+def test_redact_url_userinfo_nested_archive_today_style():
+    nested = "https://archive.ph/o/http://alice:secret@files.example.com/x"
+    out = redact_url_userinfo(nested)
+    assert "alice:secret@" not in out
+    assert "http://files.example.com/x" in out
+
+
 def test_redact_url_userinfo_leaves_clean_urls_alone():
     assert redact_url_userinfo("https://example.com/a") == "https://example.com/a"
     assert redact_url_userinfo("not a url") == "not a url"

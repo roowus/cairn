@@ -37,15 +37,44 @@ _NOREPLY = re.compile(r"@users\.noreply\.github\.com$", re.I)
 
 
 def _normalize_login(target: str) -> str:
-    """Accept a bare login, a github.com URL, or a git-clone URL → just the login."""
+    """Accept a bare login, a github.com URL, or a git-clone URL → just the login.
+
+    Only strips a local-part before ``@`` when the host is clearly GitHub
+    (``git@github.com:user/repo``). Ordinary emails like ``alice@company.com``
+    or ``user@github.com`` are left alone so we do not silently look up the
+    domain as a GitHub login.
+    """
     t = target.strip()
     if "://" in t:
         t = t.split("://", 1)[1]
     if "@" in t:
-        t = t.split("@", 1)[-1]
+        local, hostish = t.split("@", 1)
+        # git SSH: git@github.com:user/repo  or  git@github.com/user/repo
+        # Require a path after the host so plain emails like user@github.com
+        # are not treated as clone URLs.
+        if ":" in hostish:
+            host_head, pathish = hostish.split(":", 1)
+            has_path = bool(pathish.strip("/"))
+        elif "/" in hostish:
+            host_head, pathish = hostish.split("/", 1)
+            has_path = bool(pathish.strip("/"))
+        else:
+            host_head, has_path = hostish, False
+        host_head = host_head.lower()
+        if has_path and (
+            host_head == "github.com" or host_head.endswith(".github.com")
+        ):
+            t = hostish
+        else:
+            # Email-shaped / non-GitHub user@host — keep original local-part token
+            # (caller will 404 or soft-fail rather than query the domain).
+            return local or t
     t = t.removeprefix("github.com:").removeprefix("github.com/")
     t = t.lstrip("/")
     seg = t.split("/")[0]
+    # Drop trailing ".git" from clone-style tails that lacked a path slash.
+    if seg.endswith(".git"):
+        seg = seg[: -len(".git")]
     return seg or target.strip()
 
 

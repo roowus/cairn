@@ -125,27 +125,55 @@ async def test_run_command_runs_in_workspace_cwd(tmp_path):
 # --- download_url -----------------------------------------------------------
 
 
-class _FakeResp:
-    def __init__(self, content: bytes, status: int = 200, ct: str = "application/zip") -> None:
-        self.content = content
+class _FakeStreamResp:
+    """Minimal stand-in for an ``httpx`` streaming response."""
+
+    def __init__(
+        self,
+        content: bytes,
+        status: int = 200,
+        ct: str = "application/zip",
+        *,
+        content_length: str | None = None,
+        chunk_size: int = 8,
+    ) -> None:
+        self._content = content
         self.status_code = status
-        self.headers = {"content-type": ct}
+        self.headers: dict[str, str] = {"content-type": ct}
+        if content_length is not None:
+            self.headers["content-length"] = content_length
+        elif content is not None:
+            self.headers["content-length"] = str(len(content))
+        self._chunk_size = chunk_size
+
+    async def aiter_bytes(self, chunk_size: int = 65536):
+        size = chunk_size or self._chunk_size
+        data = self._content
+        for i in range(0, len(data), size):
+            yield data[i : i + size]
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        return None
 
 
 class _FakeHttp(httpx.AsyncClient):
-    """AsyncClient stand-in so PluginContext.http type-validates; ``get`` is faked."""
+    """AsyncClient stand-in so PluginContext.http type-validates; ``stream`` is faked."""
 
-    def __init__(self, resp: _FakeResp) -> None:
+    def __init__(self, resp: _FakeStreamResp) -> None:
         super().__init__()
         self._resp = resp
 
-    async def get(self, url: str) -> _FakeResp:
+    def stream(self, method: str, url: str):
+        _ = method, url
         return self._resp
 
 
 async def test_download_url_saves_bytes_and_hash(tmp_path):
     payload = b"PK\x03\x04binary-blob"
-    ctx = _ctx(tmp_path, http=_FakeHttp(_FakeResp(payload)))
+    ctx = _ctx(tmp_path, http=_FakeHttp(_FakeStreamResp(payload)))
     out = await DownloadUrlPlugin().run(
         DownloadUrlInput(target="https://example.org/chal.zip"), ctx
     )
@@ -157,11 +185,47 @@ async def test_download_url_saves_bytes_and_hash(tmp_path):
 
 
 async def test_download_url_rejects_dest_escape(tmp_path):
-    ctx = _ctx(tmp_path, http=_FakeHttp(_FakeResp(b"x")))
+    ctx = _ctx(tmp_path, http=_FakeHttp(_FakeStreamResp(b"x")))
     out = await DownloadUrlPlugin().run(
         DownloadUrlInput(target="https://example.org/x", dest="../../etc/evil"), ctx
     )
     assert "denied" in out.summary_markdown or "escapes" in out.summary_markdown
+
+
+async def test_download_url_aborts_when_content_length_exceeds_cap(tmp_path):
+    payload = b"x" * 100
+    resp = _FakeStreamResp(payload, content_length="1000000")
+    ctx = _ctx(tmp_path, http=_FakeHttp(resp))
+    out = await DownloadUrlPlugin().run(
+        DownloadUrlInput(target="https://example.org/big.bin", max_bytes=1024), ctx
+    )
+    assert "aborted" in out.summary_markdown
+    assert "Content-Length" in out.summary_markdown
+    assert out.bytes_saved == 0
+    assert not any(tmp_path.iterdir()) or not list(tmp_path.glob("**/*.bin"))
+
+
+async def test_download_url_aborts_when_stream_exceeds_cap(tmp_path):
+    # No Content-Length (or understated); stream itself exceeds the cap.
+    payload = b"A" * 5000
+    resp = _FakeStreamResp(payload, content_length=None, chunk_size=64)
+    # Drop CL so only the stream path enforces the cap.
+    resp.headers.pop("content-length", None)
+    ctx = _ctx(tmp_path, http=_FakeHttp(resp))
+    out = await DownloadUrlPlugin().run(
+        DownloadUrlInput(target="https://example.org/stream.bin", max_bytes=1024), ctx
+    )
+    assert "aborted" in out.summary_markdown
+    assert "exceeded cap" in out.summary_markdown
+    assert out.bytes_saved == 0
+    # Partial file must be removed.
+    assert list(tmp_path.rglob("stream.bin")) == []
+
+
+async def test_download_url_rejects_non_http_scheme(tmp_path):
+    ctx = _ctx(tmp_path, http=_FakeHttp(_FakeStreamResp(b"x")))
+    out = await DownloadUrlPlugin().run(DownloadUrlInput(target="file:///etc/passwd"), ctx)
+    assert "http(s)" in out.summary_markdown
 
 
 # --- integration: registers + runs through the wrapping closure ------------

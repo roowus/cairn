@@ -145,3 +145,7 @@ def test_normalize_login_variants():
     assert _normalize_login("https://github.com/torvalds/linux") == "torvalds"
     assert _normalize_login("git@github.com:torvalds/linux.git") == "torvalds"
     assert _normalize_login("github.com/torvalds") == "torvalds"
+    # Emails / non-GitHub user@host must NOT become the domain (issue #26).
+    assert _normalize_login("alice@company.com") == "alice"
+    assert _normalize_login("user@github.com") == "user"
+    assert _normalize_login("git@github.com/torvalds/linux.git") == "torvalds"

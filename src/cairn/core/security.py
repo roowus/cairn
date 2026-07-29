@@ -66,16 +66,18 @@ def redact_text(text: str) -> str:
     return redacted
 
 
-def redact_url_userinfo(url: str) -> str:
-    """Drop embedded credentials (``user:pass@host``) from a URL.
+# Nested archive wrappers (Wayback playback, archive.today, …) put the real
+# URL — including any userinfo — inside the *path*, so urlparse sees no
+# username/password on the outer URL. Match scheme://user:pass@host (or
+# user@host) segments anywhere in the string.
+_EMBEDDED_USERINFO = re.compile(
+    r"(?P<pre>(?:https?|ftp)://)(?P<userinfo>[^/@\s]+@)(?P<host>[^/\s?#]+)",
+    re.IGNORECASE,
+)
 
-    Wayback CDX and other archives often return historical URLs with HTTP
-    basic-auth userinfo. Those must not reach model summaries, entity graphs,
-    or CLI output as pivot fuel. Non-URL strings and URLs without userinfo are
-    returned unchanged.
-    """
-    if not url or "@" not in url:
-        return url
+
+def _strip_userinfo_netloc(url: str) -> str:
+    """Strip userinfo from a single absolute URL via urlparse."""
     try:
         parsed = urlparse(url)
     except ValueError:
@@ -91,6 +93,28 @@ def redact_url_userinfo(url: str) -> str:
     return urlunparse(
         (parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment)
     )
+
+
+def redact_url_userinfo(url: str) -> str:
+    """Drop embedded credentials (``user:pass@host``) from a URL.
+
+    Wayback CDX and other archives often return historical URLs with HTTP
+    basic-auth userinfo. Those must not reach model summaries, entity graphs,
+    or CLI output as pivot fuel. Also handles **nested** archive wrappers where
+    the credentialed URL sits in the path, e.g.
+    ``http://web.archive.org/web/…/http://user:pass@example.com/``.
+    Non-URL strings and URLs without userinfo are returned unchanged.
+    """
+    if not url or "@" not in url:
+        return url
+    # First: outer-URL userinfo (http://user:pass@host/...).
+    cleaned = _strip_userinfo_netloc(url)
+    # Second: any nested scheme://userinfo@host inside path/query (Wayback etc.).
+    if "@" in cleaned:
+        cleaned = _EMBEDDED_USERINFO.sub(
+            lambda m: f"{m.group('pre')}{m.group('host')}", cleaned
+        )
+    return cleaned
 
 
 def redact_secrets(value: Any) -> Any:
