@@ -19,8 +19,12 @@ from cairn.execution.cli_tools import run_cli_tool
 from cairn.execution.subprocess_util import SubprocessError
 from cairn.execution.tool_progress import progress_for
 
-# holehe prints "[+] domain.tld …" for registered addresses only (--only-used).
-_FOUND = re.compile(r"^\[\+\]\s+(\S+)", re.MULTILINE)
+# holehe prints "[+] domain.tld …" per registered address (--only-used), but it
+# also ends every run with a legend line whose first token is "[+] Email used"
+# (followed by "[-] Email not used", "[x] Rate limit", "[!] Error"). That
+# "Email" is NOT a platform, so require a domain-shaped token — a "." followed
+# by a TLD — rather than matching every "[+] <word>" line.
+_FOUND = re.compile(r"^\[\+\]\s+(\S+\.[A-Za-z]{2,})", re.MULTILINE)
 
 _DEFAULT_OVERALL_TIMEOUT = 180.0
 

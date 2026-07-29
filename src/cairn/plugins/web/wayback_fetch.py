@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from cairn.core.security import redact_url_userinfo
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 from cairn.execution.http_util import http_client
 
@@ -45,8 +46,8 @@ class WaybackFetchPlugin(BasePlugin[WaybackFetchInput, WaybackFetchOutput]):
                     summary_markdown=f"**{inp.target}** — Wayback: no archived copy found.",
                     entities=[Entity(type="url", value=url)],
                 )
-            archived_url = snap["url"]
-            page = await http.get(archived_url)
+            archived_url = redact_url_userinfo(snap["url"])
+            page = await http.get(snap["url"])  # fetch original snap URL (may have userinfo)
             page.raise_for_status()
             text = _strip_html(page.text)
             snippet = text.strip()[:2000]
@@ -59,7 +60,13 @@ class WaybackFetchPlugin(BasePlugin[WaybackFetchInput, WaybackFetchOutput]):
                 archived_url=archived_url,
                 char_count=len(text),
                 text_snippet=snippet,
-                entities=[Entity(type="url", value=url, attrs={"archived": archived_url})],
+                entities=[
+                    Entity(
+                        type="url",
+                        value=redact_url_userinfo(url),
+                        attrs={"archived": archived_url},
+                    )
+                ],
             )
 
 

@@ -19,6 +19,9 @@ async def test_crtsh_extracts_subdomains():
                 {"name_value": "api.example.com\nmail.example.com"},
                 {"name_value": "example.com"},  # the apex itself, ignored
                 {"name_value": "*.dev.example.com"},
+                # suffix lookalikes — string endswith(base) would wrongly accept
+                {"name_value": "notexample.com"},
+                {"name_value": "myexample.com"},
             ],
         )
     )
@@ -26,6 +29,8 @@ async def test_crtsh_extracts_subdomains():
     subs = set(out.subdomains)
     assert {"www.example.com", "api.example.com", "mail.example.com", "dev.example.com"} <= subs
     assert "example.com" not in subs  # apex excluded
+    assert "notexample.com" not in subs
+    assert "myexample.com" not in subs
 
 
 @respx.mock

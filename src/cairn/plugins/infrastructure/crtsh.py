@@ -99,7 +99,10 @@ class CrtshPlugin(BasePlugin[CrtshInput, CrtshOutput]):
                         continue
                     for line in str(val).splitlines():
                         name = line.strip().lstrip("*.").lower()
-                        if name and name.endswith(base) and name != base:
+                        # Label-boundary match: ``notexample.com`` must NOT count
+                        # as a subdomain of ``example.com`` (string suffix alone
+                        # is wrong; require ``*.base``).
+                        if name and name != base and name.endswith("." + base):
                             found.add(name)
             subdomains = sorted(found)[: inp.limit]
             if not subdomains:
