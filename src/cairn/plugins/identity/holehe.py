@@ -114,7 +114,8 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
                 base
                 + "\n\n_Caveat: holehe is best-effort — rate-limiting/anti-bot cause false "
                 "negatives, and it only probes its bundled ~120 sites. For breadth, pivot to "
-                "username_check/sherlock on a known handle (different sites), or hibp for breaches._"
+                "username_check/sherlock on a known handle (different sites), "
+                "or hibp for breaches._"
             ),
             sites=sites,
             entities=[Entity(type="email", value=inp.target)],
