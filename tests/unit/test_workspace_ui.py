@@ -20,7 +20,13 @@ from cairn.interfaces.tui.permission_panel import (
 # --- /workspace command -----------------------------------------------------
 
 
-def test_cmd_workspace_renders_tree(tmp_path):
+def test_cmd_workspace_renders_tree(tmp_path, monkeypatch):
+    # chdir into an empty dir so the repo's .venv (thousands of files) can't fill
+    # the tree's 500-entry cap before the scratch root (tmp_path) is walked — cwd
+    # is always a workspace root, so an uncontrolled cwd makes this test flaky.
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
     (tmp_path / "challenge.zip").write_bytes(b"PK\x03\x04")
     buf = io.StringIO()
     console = Console(file=buf, force_terminal=False, width=120)
