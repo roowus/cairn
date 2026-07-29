@@ -101,12 +101,20 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
         sites = sorted({m.group(1) for m in _FOUND.finditer(text)})
         preview = ", ".join(sites[:40])
         extra = f" (+{len(sites) - 40} more)" if len(sites) > 40 else ""
+        if sites:
+            base = f"**{inp.target}** — holehe: {len(sites)} platform(s): {preview}{extra}"
+        else:
+            base = f"**{inp.target}** — holehe: no registered platforms reported."
+        # holehe is best-effort: rate-limiting/anti-bot produce false negatives (a
+        # non-hit does NOT mean no account), and it only covers its bundled site
+        # list. Say so + steer toward complementary tools for breadth.
         return HoleheOutput(
             source=self.name,
             summary_markdown=(
-                f"**{inp.target}** — holehe: {len(sites)} platforms: {preview}{extra}"
-                if sites
-                else f"**{inp.target}** — holehe: no registered platforms reported."
+                base
+                + "\n\n_Caveat: holehe is best-effort — rate-limiting/anti-bot cause false "
+                "negatives, and it only probes its bundled ~120 sites. For breadth, pivot to "
+                "username_check/sherlock on a known handle (different sites), or hibp for breaches._"
             ),
             sites=sites,
             entities=[Entity(type="email", value=inp.target)],
