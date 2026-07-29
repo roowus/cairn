@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import typer
@@ -32,10 +33,63 @@ HELP = """\
   /reset          clear conversation history
   /quit           exit
 
+[bold]Shell & files (user-trusted — not audited, not wrapped):[/bold]
+  !command        run a shell command, print its output
+  !!command       run a shell command; capture its output into your NEXT prompt
+  @path           inline a workspace file's contents into your prompt
+
 [bold]During a turn:[/bold] press [bold]Esc[/bold] or [bold]Ctrl-C[/bold] to stop the agent.
 
 Anything else is sent to the analyst agent as an investigation request.
 """
+
+_INLINE_MAX_BYTES = 200_000  # cap per @file inlined into a prompt
+# @path tokens: `@` not preceded by a word char or `/` (so emails like a@b.com
+# and slash paths stay literal), followed by non-space chars.
+_ATFILE_RE = re.compile(r"(?<![\w/])@([^\s@]+)")
+
+
+async def _run_user_shell(cmd: str):
+    """Run a user ``!``/``!!`` shell command with a scrubbed env.
+
+    User-trusted passthrough: the output is the user's own command result, so it is
+    printed/injected raw — it never enters the audited tool closure and is never
+    wrapped in ``<untrusted_external_data>``. The env is still scrubbed so ``!env``
+    can't dump an exported LLM key to the terminal.
+    """
+    from cairn.execution.subprocess_util import run_shell
+    from cairn.execution.workspace import scrub_env
+
+    return await run_shell(cmd, env=scrub_env(os.environ))
+
+
+def _expand_atfiles(console: Console, session: object, line: str) -> str:
+    """Inline ``@path`` tokens with in-workspace file contents.
+
+    User-trusted: inlined text is the user's own selection, so it enters the prompt
+    directly (NOT wrapped). Out-of-workspace ``@path`` is left literal with a
+    warning; each file is capped at ``_INLINE_MAX_BYTES``.
+    """
+    from cairn.execution.workspace import resolve_in_workspace, workspace_roots
+
+    roots = workspace_roots(session.ctx)  # type: ignore[attr-defined]
+
+    def _repl(m: re.Match[str]) -> str:
+        token = m.group(1)
+        resolved = resolve_in_workspace(token, roots)
+        if resolved is None:
+            console.print(f"[yellow]@{token} outside workspace — left literal.[/yellow]")
+            return m.group(0)
+        try:
+            text = resolved.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            console.print(f"[yellow]@{token} unreadable ({exc}) — left literal.[/yellow]")
+            return m.group(0)
+        if len(text) > _INLINE_MAX_BYTES:
+            text = text[:_INLINE_MAX_BYTES] + "\n…(truncated)"
+        return f"contents of @{token}:\n```\n{text}\n```"
+
+    return _ATFILE_RE.sub(_repl, line)
 
 
 def _banner(console: Console, tool_count: int, model: str | None, mode: str) -> None:
@@ -265,6 +319,7 @@ def repl(*, basic: bool = False) -> None:
     asyncio.set_event_loop(loop)
     # Provision sherlock/holehe/etc. so the user never has to /install.
     _bootstrap_cli_tools(console, loop)
+    pending_injection: str | None = None  # captured `!!` output → prepended to next prompt
     try:
         while True:
             try:
@@ -272,7 +327,31 @@ def repl(*, basic: bool = False) -> None:
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[dim]bye.[/dim]")
                 break
+            # A captured `!!` shell output is prepended to the next non-command prompt.
+            if pending_injection is not None:
+                inj = pending_injection
+                pending_injection = None
+                if line and not line.startswith(("!", "/")):
+                    line = f"{inj}\n\n{line}"
             if not line:
+                continue
+            # `!`/`!!` shell passthrough — USER-trusted: printed/injected raw,
+            # never wrapped in <untrusted_external_data> and never audited.
+            if line.startswith("!"):
+                capture = line.startswith("!!")
+                cmd = (line[2:] if capture else line[1:]).strip()
+                if cmd:
+                    result = loop.run_until_complete(_run_user_shell(cmd))
+                    out = result.stdout.decode(errors="replace")
+                    if capture:
+                        pending_injection = out
+                        console.print(
+                            f"[dim]! captured {len(out)} chars → prepended to next prompt.[/dim]"
+                        )
+                    else:
+                        console.print(out, end="" if out.endswith("\n") else "\n")
+                        if result.returncode:
+                            console.print(f"[dim](exit {result.returncode})[/dim]")
                 continue
             if line in ("/quit", "/exit", "/q"):
                 break
@@ -317,7 +396,7 @@ def repl(*, basic: bool = False) -> None:
                 console.print(f"[yellow]Unknown command:[/yellow] {line}  (try /help)")
                 continue
 
-            _run_turn(console, loop, session, line)
+            _run_turn(console, loop, session, _expand_atfiles(console, session, line))
     finally:
         loop.run_until_complete(session.aclose())
         loop.close()
