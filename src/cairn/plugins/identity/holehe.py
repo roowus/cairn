@@ -62,18 +62,14 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
         on_line = progress_for(ctx)
 
         try:
-            # holehe v1.61 flags: --only-used (not --only-known), --no-color, --no-clear
+            # holehe v1.61 flags: --only-used --no-color --no-clear.
+            # NOTE: do NOT pass -NP/--no-password-recovery — those probes ARE
+            # holehe's core detection. Skipping them makes holehe fast-fail every
+            # site (~0.4s) and report "no platforms" — a false negative. Confirmed
+            # empirically: without -NP, holehe finds real registrations in ~10s.
             stdout, stderr = await run_cli_tool(
                 "holehe",
-                [
-                    "--only-used",
-                    "--no-color",
-                    "--no-clear",
-                    "-NP",  # skip password-recovery probes (faster, less noisy)
-                    "-T",
-                    "10",
-                    inp.target,
-                ],
+                ["--only-used", "--no-color", "--no-clear", inp.target],
                 timeout=overall,
                 auto_install=True,
                 progress=progress,

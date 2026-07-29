@@ -30,9 +30,17 @@ HOLEHE_V1_61_STDOUT = b"""\
 
 
 async def test_holehe_extracts_domains_not_email_legend(monkeypatch):
-    """run() returns only real domains; the legend's "Email" never survives."""
+    """run() returns only real domains; the legend's "Email" never survives.
+
+    Also guards the invocation: ``-NP``/``--no-password-recovery`` must NOT be
+    passed — those probes are holehe's core detection, and skipping them makes it
+    fast-fail every site (~0.4s) and report "no platforms" (the false-negative
+    regression that reopened this issue).
+    """
+    captured: list[list[str]] = []
 
     async def fake_run_cli_tool(*args, **kwargs):
+        captured.append(args[1] if len(args) > 1 else kwargs.get("args", []))
         return HOLEHE_V1_61_STDOUT, b""
 
     monkeypatch.setattr("cairn.plugins.identity.holehe.run_cli_tool", fake_run_cli_tool)
@@ -43,6 +51,10 @@ async def test_holehe_extracts_domains_not_email_legend(monkeypatch):
 
     assert out.sites == ["adobe.com", "blizzard.com", "github.com", "spotify.com"]
     assert "Email" not in out.sites  # the regression: bogus "Email" platform
+    # Regression guard: never re-add the flag that cripples holehe's detection.
+    holehe_args = captured[0]
+    assert "-NP" not in holehe_args
+    assert "--no-password-recovery" not in holehe_args
 
 
 def test_found_regex_skips_non_domain_tokens():
