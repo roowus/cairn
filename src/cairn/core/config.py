@@ -102,6 +102,14 @@ class Settings(BaseSettings):
     # hackertarget ~50/day) are excluded from the brain's tools. Set
     # CAIRN_ALLOW_DAILY_LIMITED=1 to opt them in. Rate-limited-only sources stay on.
     allow_daily_limited: bool = False
+    # Off by default: agentic tools (category=="agentic": run_command, write_file,
+    # download_url, read_file, list_files, secret_scan) are hidden from the brain
+    # in the default "investigate" mode (passive recon — no shell/file control for
+    # an LLM that ingests untrusted web content). They register automatically in
+    # "challenge" mode, or when CAIRN_ALLOW_AGENTIC=1 (the escape hatch). Direct
+    # `cairn plugin <name>` invocation is unaffected (that's the human, not the
+    # brain). Issue #15.
+    allow_agentic: bool = False
     # --- Parallel-session knobs (see docs/architecture/parallel-sessions.md) ---
     # Ceiling on concurrently-running sessions in a SessionPool. Throughput/
     # orchestration only — never relaxes the hard-stop. The default is conservative

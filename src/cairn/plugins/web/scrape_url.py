@@ -22,6 +22,7 @@ from pydantic import Field
 
 from cairn.core.entities import extract_entities
 from cairn.core.provenance import Confidence, Provenance
+from cairn.core.security import redact_url_userinfo
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 from cairn.execution.http_util import http_client
 
@@ -150,7 +151,7 @@ def _summary(url: str, out: ScrapeUrlOutput) -> str:
         f"- Text: {preview}{'…' if len(out.text) > 600 else ''}",
     ]
     if out.images:
-        lines.append(f"- Image(s): {', '.join(out.images[:3])}")
+        lines.append(f"- Image(s): {', '.join(redact_url_userinfo(u) for u in out.images[:3])}")
     return "\n".join(lines)
 
 

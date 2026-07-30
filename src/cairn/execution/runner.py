@@ -55,6 +55,7 @@ def build_context(
         keys=s.plugin_keys(),
         http=client,
         allow_daily_limited=s.allow_daily_limited,
+        allow_agentic=s.allow_agentic or s.mode == "challenge",
         workspace=_resolve_workspace(s),
     )
 

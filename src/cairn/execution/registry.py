@@ -41,16 +41,22 @@ class PluginRegistry:
         return list(self._plugins.values())
 
     def available(self, ctx: PluginContext) -> list[BasePlugin[Any, Any]]:
-        """Plugins the brain may call: key-available AND (not daily-limited unless opted in).
+        """Plugins the brain may call, applying the policy gates.
 
-        Key gating lives on the plugin (``available``); the daily-quota
-        preference is a policy, enforced here so listing/discovery can still see
-        every plugin regardless of the toggle.
+        - key gate lives on the plugin (``available``);
+        - daily-quota preference (``allow_daily_limited``);
+        - agentic gate (``allow_agentic``): in default investigate mode the brain
+          gets no shell/file tools (issue #15); challenge mode or
+          ``CAIRN_ALLOW_AGENTIC=1`` opts in.
+
+        Listing/discovery still see every plugin regardless of the toggles.
         """
         return [
             p
             for p in self._plugins.values()
-            if p.available(ctx) and (ctx.allow_daily_limited or not p.daily_limited)
+            if p.available(ctx)
+            and (ctx.allow_daily_limited or not p.daily_limited)
+            and (ctx.allow_agentic or p.category != "agentic")
         ]
 
     def get(self, name: str) -> BasePlugin[Any, Any] | None:

@@ -69,3 +69,21 @@ async def test_scrape_adds_scheme_to_bare_target():
         assert "https://example.com/path" in out.summary_markdown
     finally:
         mod._static = orig
+
+
+async def test_scrape_summary_redacts_userinfo_from_image_urls():
+    # issue #32: image URLs in the summary must not surface user:pass@host to the
+    # model (the summary is wrapped but NOT redacted).
+    from cairn.plugins.web.scrape_url import ScrapeUrlOutput, _summary
+
+    out = ScrapeUrlOutput(
+        source="scrape_url",
+        backend="httpx",
+        title="t",
+        text="hello",
+        links=[],
+        images=["http://u:p@cdn.example/a.jpg"],
+    )
+    summary = _summary("https://example.com", out)
+    assert "u:p@" not in summary
+    assert "cdn.example/a.jpg" in summary  # path kept, credentials stripped

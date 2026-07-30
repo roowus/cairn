@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from cairn.core.security import redact_url_userinfo
 from cairn.execution.base import (
     BasePlugin,
     CostSpec,
@@ -173,7 +174,7 @@ def _summary(out: UrlscanOutput, target: str) -> str:
     for h in out.hits:
         title = f"“{h.page_title}”" if h.page_title else "(no title)"
         lines.append(
-            f"- {h.page_url or h.page_domain} — {title} "
+            f"- {redact_url_userinfo(h.page_url or h.page_domain or '')} — {title} "
             f"[ip={h.page_ip or '?'} server={h.server or '?'}]"
         )
     return "\n".join(lines)

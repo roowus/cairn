@@ -61,6 +61,9 @@ class PluginContext(BaseModel):
     # When False (default), daily-quota'd free plugins are excluded from the
     # brain's tool list. Set True (CAIRN_ALLOW_DAILY_LIMITED=1) to opt in.
     allow_daily_limited: bool = False
+    # When False (default), agentic tools are excluded from the brain's tool list
+    # in investigate mode (set True in challenge mode, or CAIRN_ALLOW_AGENTIC=1).
+    allow_agentic: bool = False
     # Agentic file/exec: the scratch workspace root (cwd is ALSO a root, computed
     # at call time). None when agentic mode is off / workspace unset.
     workspace: Path | None = None
@@ -170,6 +173,8 @@ def plugin_status(plugin: BasePlugin[Any, Any], ctx: PluginContext) -> str:
         return "hidden (set key)"
     if plugin.daily_limited and not ctx.allow_daily_limited:
         return "hidden (CAIRN_ALLOW_DAILY_LIMITED=0)"
+    if plugin.category == "agentic" and not ctx.allow_agentic:
+        return "hidden (investigate mode; use CAIRN_MODE=challenge)"
     return "active"
 
 

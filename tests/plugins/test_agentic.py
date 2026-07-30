@@ -254,8 +254,11 @@ async def test_read_file_runs_through_wrapping_closure(fake_settings, tmp_path, 
     (tmp_path / "chal.txt").write_text("find me 1.2.3.4", encoding="utf-8")
     reg = PluginRegistry()
     reg.register(ReadFilePlugin())
+    # Agentic tools register only in challenge mode (issue #15); this test
+    # exercises the agentic wrap-back path, so use challenge settings.
+    challenge_settings = fake_settings.model_copy(update={"mode": "challenge"})
     session = Session(
-        settings=fake_settings, registry=reg, model=TestModel(), db=_db(tmp_path)
+        settings=challenge_settings, registry=reg, model=TestModel(), db=_db(tmp_path)
     )
     try:
         await session.ask(

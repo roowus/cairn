@@ -93,6 +93,11 @@ class ToolCard:
     def done(self) -> bool:
         return self.state == _DONE
 
+    @property
+    def active(self) -> bool:
+        """Pending (model composing the call) or running — i.e. still in flight."""
+        return self.state in (_PENDING, _RUNNING)
+
     def render(self) -> RenderableType:
         if self.state == _RUNNING:
             if self._spinner is None:

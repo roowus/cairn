@@ -131,7 +131,7 @@ reused — not duplicated.
 
 `Settings.mode: Literal["investigate","challenge"]` (default `investigate`, set
 via `CAIRN_MODE`) selects the reconnaissance **stance text** in the system
-prompt. Today this is **prompt posture, not tool registration**:
+prompt AND gates which tools the brain sees:
 
 - **investigate** — passive-recon wording: public records, third-party indexes,
   certificate transparency, DNS, web archives; refuse active scanning of
@@ -142,13 +142,13 @@ prompt. Today this is **prompt posture, not tool registration**:
   forbids scanning third-party / external hosts without explicit user
   instruction.
 
-**Important (current code):** `register_tools` → `registry.available(ctx)` only
-gates keys + daily-limited plugins. All `category=="agentic"` tools
-(`read_file`, `list_files`, `write_file`, `download_url`, `run_command`) and
-`install_cli` are registered in **both** modes. Mode does **not** hide the
-shell. Tracking whether investigate should filter agentic tools is
-[issue #15](https://github.com/roowus/cairn/issues/15); docs honesty is
-[issue #33](https://github.com/roowus/cairn/issues/33).
+**Mode now gates tool registration (issue #15 fixed):** `register_tools` →
+`registry.available(ctx)` hides `category=="agentic"` tools (`read_file`,
+`list_files`, `write_file`, `download_url`, `run_command`, `secret_scan`) from
+the brain in **investigate** mode; they register in **challenge** mode or when
+`CAIRN_ALLOW_AGENTIC=1`. (`install_cli`, category `identity`, stays available in
+both — it's a repair tool used by sherlock/holehe.) Direct `cairn plugin <name>`
+invocation is unaffected — that's the operator, not the brain.
 
 `build_system_prompt(settings)` renders the stance by mode; the REPL banner
 surfaces the active mode.
