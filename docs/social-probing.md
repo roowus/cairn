@@ -157,20 +157,20 @@ Implemented in `execution/social_probe.py`.
 ### `username_check` (preferred for major socials)
 
 ```text
-username_check(target="roowus")
+username_check(target="<handle>")
 # optional: platforms=["instagram","github","threads"]
 ```
 
 - Only first-party probes  
 - Fast relative to full Sherlock  
 - Returns found / not_found / unknown with evidence  
-- Verified live example: `@roowus` → Instagram (display name + follower line),
+- Verified live example: `@<handle>` → Instagram (display name + follower line),
   GitHub, Threads  
 
 ### `sherlock` (breadth)
 
 ```text
-sherlock(target="roowus")
+sherlock(target="<handle>")
 ```
 
 1. Runs CLI wide sweep (1–3 minutes; overall timeout default **240s**, not the
@@ -184,9 +184,9 @@ sherlock(target="roowus")
 
 Profile `email` is **often null** even when commits leak a real address.
 
-Example (public data): user `roowus` has `"email": null` on
-`/users/roowus`, but commits on `Lewis-BSE-Portfolio` / `gh-pages` carry
-`From: roowus <lewishelh@gmail.com>`.
+Example (public data): user `<handle>` has `"email": null` on
+`/users/<handle>`, but commits on a personal repo / `gh-pages` carry
+`From: <handle> <real-address@example.com>`.
 
 So `github` now:
 
@@ -257,7 +257,7 @@ browser), not smarter User-Agent strings alone.
 
 ---
 
-## 9. Worked counter-example: `@roowus`
+## 9. Worked counter-example: `@<handle>`
 
 | Check | Old result | Why | New result |
 |---|---|---|---|

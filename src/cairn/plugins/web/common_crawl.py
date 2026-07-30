@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import Field
 
+from cairn.core.security import redact_url_userinfo
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 from cairn.execution.http_util import http_client
 
@@ -93,7 +94,10 @@ class CommonCrawlPlugin(BasePlugin[CommonCrawlInput, CommonCrawlOutput]):
                     summary_markdown=f"**{inp.target}** — Common Crawl ({latest}): 0 matches.",
                     entities=[Entity(type="url", value=inp.target)],
                 )
-            preview = "\n".join(f"  - {m.get('timestamp')} {m.get('url')}" for m in matches[:8])
+            preview = "\n".join(
+                f"  - {m.get('timestamp')} {redact_url_userinfo(m.get('url') or '')}"
+                for m in matches[:8]
+            )
             return CommonCrawlOutput(
                 source=self.name,
                 summary_markdown=(

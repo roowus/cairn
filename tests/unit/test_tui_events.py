@@ -494,3 +494,42 @@ def test_composer_tool_progress_appends_streamed_stdout_to_card_body():
     composer.tool_progress("nope", "ignored")
     assert card.body == ["file1.txt", "file2.txt"]
 
+
+def _render_to_str(composer) -> str:
+    import io
+
+    buf = io.StringIO()
+    Console(file=buf, force_terminal=False, width=80).print(composer.render())
+    return buf.getvalue()
+
+
+def test_composer_shows_working_indicator_when_idle_after_tool():
+    """#35: after a tool finishes and before the answer streams, the REPL must not
+    go blank — show an animated 'working' indicator (no in-flight card, no text)."""
+    from cairn.interfaces.tui.cards import ToolCard
+    from cairn.interfaces.tui.live_turn import _Composer
+
+    composer = _Composer(SimpleNamespace(), show_status=False, chrome=False)
+    card = ToolCard(tool_call_id="t1", tool_name="sherlock")
+    composer.cards["t1"] = card
+    card.mark_running()
+    card.finish("ok", "7 results", None)  # finished — no in-flight card, no text yet
+
+    out = _render_to_str(composer)
+    assert "working" in out  # indicator shown, not a blank panel
+
+
+def test_composer_no_working_indicator_while_tool_running():
+    """A running tool card is itself the activity — no extra 'working' line."""
+    from cairn.interfaces.tui.cards import ToolCard
+    from cairn.interfaces.tui.live_turn import _Composer
+
+    composer = _Composer(SimpleNamespace(), show_status=False, chrome=False)
+    card = ToolCard(tool_call_id="t1", tool_name="sherlock")
+    composer.cards["t1"] = card
+    card.mark_running()  # still in flight
+
+    out = _render_to_str(composer)
+    assert "working" not in out
+    assert "sherlock" in out  # the running card is visible
+

@@ -106,11 +106,12 @@ port sweeps, vulnerability exploitation, and aggressive crawling of third-party
 hosts are out of scope by design. Treat every target as governed by
 authorization and rules of engagement.
 
-**Mode today is prompt posture, not a capability gate.** `CAIRN_MODE=investigate`
-(default) vs `CAIRN_MODE=challenge` only swaps the system-prompt stance text.
-Agentic tools (`run_command`, `write_file`, `download_url`, …) remain registered
-in both modes until [issue #15](https://github.com/roowus/cairn/issues/15) is
-resolved. Challenge wording steers the brain toward analyzing *provided
-artifacts* with those tools; it still forbids scanning third-party / external
-hosts without explicit user instruction. See
-[agentic file & tool control](agentic-file-control.md).
+**Mode is a capability gate, not just prompt posture.** In `CAIRN_MODE=investigate`
+(default) the brain is not even handed the agentic tools (`run_command`,
+`write_file`, `download_url`, …) — they're hidden from its tool list, so passive
+recon can't accidentally shell out (issue #15, fixed). `CAIRN_MODE=challenge` (or
+`CAIRN_ALLOW_AGENTIC=1`) registers them; the challenge stance then steers the
+brain toward analyzing *provided artifacts* and still forbids scanning
+third-party / external hosts without explicit user instruction. Direct
+`cairn plugin <name>` invocation is unaffected (that's the operator, not the
+brain). See [agentic file & tool control](agentic-file-control.md).

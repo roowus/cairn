@@ -41,7 +41,7 @@ cairn = "cairn.cli:main"
 From the repo checkout:
 
 ```bash
-cd ~/projects/cairn          # or wherever you cloned
+cd /path/to/cairn          # or wherever you cloned
 uv sync --extra dev          # project .venv for tests/dev
 cp .env.example .env         # optional project-local env while developing
 make install-global
@@ -108,7 +108,7 @@ These are separate:
 
 | Path | Purpose |
 |---|---|
-| Checkout, e.g. `~/projects/cairn` | Source (editable install target) |
+| Checkout (`/path/to/cairn`) | Source (editable install target) |
 | `~/.local/bin/cairn` | CLI shim on `PATH` |
 | `~/.local/share/uv/tools/cairn/` | Isolated tool virtualenv + deps |
 | **`~/.cairn/`** | **Runtime data + user config** (db, env, skills, toml) |
@@ -533,7 +533,7 @@ land in `~/.local/bin` (also searched explicitly after install).
 
 ```bash
 # 1. Clone & deps
-git clone <repo> ~/projects/cairn && cd ~/projects/cairn
+git clone <repo> /path/to/cairn && cd /path/to/cairn
 uv sync --extra dev
 
 # 2. LLM credentials

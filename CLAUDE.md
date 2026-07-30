@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Cairn — terminal-native **agentic OSINT** CLI ("Claude Code for OSINT"). Local:
-`~/projects/cairn`. Public: https://github.com/roowus/cairn. Python `>=3.12`
+Cairn — terminal-native **agentic OSINT** CLI ("Claude Code for OSINT"). Public:
+https://github.com/roowus/cairn (branch `main`). Python `>=3.12`
 (local pin 3.14 via `.python-version`; CI currently runs 3.13) + uv, src-layout.
 **Read [CONTRIBUTING.md](CONTRIBUTING.md) first** — full setup, day-to-day
 commands, plugin-authoring, and the rules below in more detail.

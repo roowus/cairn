@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from rich.console import Console, Group, RenderableType
 from rich.live import Live
 from rich.panel import Panel
+from rich.spinner import Spinner
 from rich.text import Text
 
 from cairn.interfaces.tui.cards import ToolCard
@@ -163,10 +164,14 @@ class _Composer:
     def render(self) -> RenderableType:
         if not self.md.empty:
             body: RenderableType = self.md.render()
-        elif not self.cards:
-            body = Text("⠋ thinking…", style=theme.muted)
+        elif not any(c.active for c in self.cards.values()):
+            # No streamed text AND no in-flight tool call: the model is still
+            # thinking/composing the answer (or about to emit its first tool call).
+            # Show an ANIMATED indicator so the REPL never looks frozen mid-turn
+            # (issue #35) — e.g. after a tool finishes, before the answer streams.
+            body = Spinner("dots", text=Text("  working…", style=theme.muted), style=theme.muted)
         else:
-            body = Text("")  # tool cards (some running) provide the activity
+            body = Text("")  # an in-flight tool card provides the activity
         return self._frame(body)
 
     def sealed(self) -> RenderableType:
