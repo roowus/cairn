@@ -110,4 +110,11 @@ def extract_entities(text: str, *, max_per_type: int = 50) -> list[ExtractedEnti
         if any(d.lower() in eu.lower() for eu in emails_urls):
             continue
         _add("domain", d)
+        # Typed-asset enrichment (moat P1): a host with >=3 labels (>=2 dots) is
+        # ALSO a subdomain. Additive — the bare "domain" type is kept unchanged so
+        # existing pivots/graph keys don't shift; the extra "subdomain" type lets
+        # the pivot engine distinguish apex domains from subdomains. A real
+        # public-suffix split (apex vs sub) is deferred to the pivot engine.
+        if d.count(".") >= 2:
+            _add("subdomain", d)
     return found

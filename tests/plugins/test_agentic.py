@@ -15,6 +15,7 @@ from pathlib import Path
 import httpx
 from pydantic_ai.models.test import TestModel
 
+from cairn.core.provenance import Confidence
 from cairn.execution.base import PluginContext
 from cairn.execution.registry import PluginRegistry
 from cairn.orchestration.session import Session
@@ -51,6 +52,20 @@ async def test_read_file_denies_outside_workspace(tmp_path, monkeypatch):
     out = await ReadFilePlugin().run(ReadFileInput(target="/etc/passwd"), _ctx(tmp_path))
     assert "denied" in out.summary_markdown
     assert out.bytes_read == 0
+
+
+async def test_read_file_mined_entities_carry_provenance(tmp_path):
+    # text-mined entities are tentative (single-source) + carry chain-of-custody
+    path = tmp_path / "note.txt"
+    path.write_text("contact test@example.com soon\n")
+    out = await ReadFilePlugin().run(ReadFileInput(target=str(path)), _ctx(tmp_path))
+    emails = [e for e in out.entities if e.type == "email"]
+    assert emails
+    e = emails[0]
+    assert e.confidence is Confidence.TENTATIVE
+    assert e.provenance is not None
+    assert e.provenance.tool == "read_file"
+    assert e.provenance.source_url == f"file://{path}"
 
 
 # --- write_file -------------------------------------------------------------

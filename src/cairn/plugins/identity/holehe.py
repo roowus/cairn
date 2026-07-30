@@ -48,6 +48,7 @@ class HolehePlugin(BasePlugin[HoleheInput, HoleheOutput]):
     name = "holehe"
     category = "identity"
     requires_key = None
+    detectability = "medium"  # probes signup/recovery endpoints of services
     input_model = HoleheInput
     output_model = HoleheOutput
 

@@ -48,6 +48,7 @@ def _make_list_cmd(registry: Any) -> Any:
             table.add_column("name", style="cyan")
             table.add_column("category", style="green")
             table.add_column("tier", style="yellow")
+            table.add_column("detect", style="red")
             table.add_column("cost", style="magenta")
             table.add_column("status")
             for p in sorted(registry.all(), key=lambda x: x.name):
@@ -55,6 +56,7 @@ def _make_list_cmd(registry: Any) -> Any:
                     p.name.replace("_", "-"),
                     p.category,
                     plugin_tier(p),
+                    p.detectability,
                     cost_label(p),
                     plugin_status(p, ctx),
                 )

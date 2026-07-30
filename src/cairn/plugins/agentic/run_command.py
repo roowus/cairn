@@ -48,6 +48,7 @@ class RunCommandPlugin(BasePlugin[RunCommandInput, RunCommandOutput]):
     name = "run_command"
     category = "agentic"
     requires_key = None
+    detectability = "high"  # arbitrary shell — can active-scan; agent must justify
     input_model = RunCommandInput
     output_model = RunCommandOutput
 

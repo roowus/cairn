@@ -51,6 +51,28 @@ Invariant preserved: Rich `Live` and prompt_toolkit never run concurrently. The
 multi-agent `/spawn` + laned view remain (tracked in #2, on the SessionPool
 backend). See [UI overhaul](architecture/ui-overhaul.md). **276 tests, ruff clean.**
 
+## Evidence model — provenance, confidence, OPSEC, typed assets — ✅ DONE
+
+Lands the concrete implementations of the [strategy moats](strategy.md)
+(Pillars 2–4 implemented; Pillar 1's data shape landed), models + tradecraft
+adapted from [Claude-OSINT](https://github.com/elementalsouls/Claude-OSINT) (MIT).
+See [evidence model](architecture/evidence-model.md).
+
+- ✅ **Provenance (P2)** — `Provenance`/`Confidence`/`Severity`/`Finding` models
+  (`core/provenance.py`); `Entity` carries optional provenance/confidence/first_seen;
+  graph store round-trips them and promotes confidence to firm on ≥2 sources.
+- ✅ **OPSEC detectability (P3)** — `detectability` (low/medium/high) on every
+  plugin + CLI tool; surfaced in listings; passive-by-default taught to the brain.
+- ✅ **Confidence/severity/scope in the brain (P4)** — always-on discipline
+  (tentative/firm/confirmed + rule-of-three + downgrade-by-default + scope-check).
+- ✅ **Typed-asset taxonomy (P1 data shape)** — `core/assets.py` (9 categories +
+  `asset_key` + edge vocab); `subdomain` mined additively. The BFS pivot engine
+  itself (§3) is the next epic on this substrate.
+- ✅ **Two plugins** — `secret_scan` (48-pattern secret scanner) + `h1_reference`
+  (keyless HackerOne reference).
+- ✅ **8 tradecraft skills** — `recon-methodology` + 7 chunked arsenals, Cairn-
+  adapted (active gated, paid excluded, MIT attributed).
+
 ## 1. The investigative brain (system prompt rewrite) — ✅ DONE
 
 `reasoning/system_prompt.py` is now the **investigator brain** that drives the

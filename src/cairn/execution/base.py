@@ -11,12 +11,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from cairn.core.provenance import Confidence, Provenance
 from cairn.execution.browser_http import DEFAULT_BROWSER_UA
 
 
@@ -74,11 +76,23 @@ class PluginContext(BaseModel):
 
 
 class Entity(BaseModel):
-    """A graph node captured from a tool result (ip, domain, email, asn, …)."""
+    """A graph node captured from a tool result (ip, domain, email, asn, …).
+
+    Carries optional evidence metadata (moat Pillar 2): ``confidence`` (how
+    corroborated), ``provenance`` (chain-of-custody — source/time/hash/tool), and
+    ``first_seen``. All default to ``None`` so the existing plugin construction
+    sites (``Entity(type=…, value=…)`` / ``Entity(type=…, value=…, attrs=…)``) are
+    unchanged; the text-mining converters populate them (see scrape_url /
+    web_search / read_file). The graph store upgrades ``confidence`` as more
+    independent sources corroborate the same node.
+    """
 
     type: str
     value: str
     attrs: dict[str, Any] = Field(default_factory=dict)
+    confidence: Confidence | None = None
+    provenance: Provenance | None = None
+    first_seen: datetime | None = None
 
 
 class PluginInput(BaseModel):
@@ -112,6 +126,14 @@ class BasePlugin[TIn: "PluginInput", TOut: "PluginOutput"](ABC):
     name: ClassVar[str] = ""
     category: ClassVar[str] = ""  # "identity" | "infrastructure" | "web"
     requires_key: ClassVar[str | None] = None  # None = free; else logical key name
+    # OPSEC: the trail this tool leaves on the target (moat Pillar 3, ported from
+    # Claude-OSINT methodology §6.2). "low" = passive — the target never sees you
+    # (CT logs, archives, third-party indexes, DNS via resolver, local file ops);
+    # "medium" = a targeted probe the target's infra observes (HTTP GET to the
+    # target, holehe/username presence checks); "high" = active scanning (port
+    # scans, brute-force, fuzzing). Default "low" = passive-by-default. Override
+    # on plugins that touch a target; the brain must justify medium/high touches.
+    detectability: ClassVar[str] = "low"
     # True if the free tier has a hard per-DAY quota (not just rate-limiting).
     # Such plugins are excluded from the brain's tool list unless the user opts
     # in via CAIRN_ALLOW_DAILY_LIMITED=1. Rate-limited-only sources stay on.

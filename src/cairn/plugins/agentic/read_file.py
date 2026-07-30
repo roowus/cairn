@@ -13,6 +13,7 @@ from pathlib import Path
 from pydantic import Field
 
 from cairn.core.entities import extract_entities
+from cairn.core.provenance import Confidence, Provenance
 from cairn.execution.base import (
     BasePlugin,
     Entity,
@@ -92,7 +93,7 @@ class ReadFilePlugin(BasePlugin[ReadFileInput, ReadFileOutput]):
             truncated=truncated,
         )
         out.summary_markdown = _summary(resolved, text, total, truncated)
-        out.entities = _entities(text)
+        out.entities = _entities(text, source_url=f"file://{resolved}")
         return out
 
 
@@ -103,7 +104,7 @@ def _summary(path: Path, text: str, total: int, truncated: bool) -> str:
     return f"`{path}`{tag}\n\n```\n{shown}{more}\n```"
 
 
-def _entities(text: str) -> list[Entity]:
+def _entities(text: str, *, source_url: str | None = None) -> list[Entity]:
     seen: set[tuple[str, str]] = set()
     ents: list[Entity] = []
     for ex in extract_entities(text):
@@ -111,5 +112,12 @@ def _entities(text: str) -> list[Entity]:
         if key in seen:
             continue
         seen.add(key)
-        ents.append(Entity(type=ex.type, value=ex.value))
+        ents.append(
+            Entity(
+                type=ex.type,
+                value=ex.value,
+                confidence=Confidence.TENTATIVE,
+                provenance=Provenance(tool="read_file", source_url=source_url),
+            )
+        )
     return ents

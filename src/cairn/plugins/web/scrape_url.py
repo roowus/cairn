@@ -21,6 +21,7 @@ from bs4 import BeautifulSoup
 from pydantic import Field
 
 from cairn.core.entities import extract_entities
+from cairn.core.provenance import Confidence, Provenance
 from cairn.execution.base import BasePlugin, Entity, PluginContext, PluginInput, PluginOutput
 from cairn.execution.http_util import http_client
 
@@ -57,6 +58,7 @@ class ScrapeUrlPlugin(BasePlugin[ScrapeUrlInput, ScrapeUrlOutput]):
     name = "scrape_url"
     category = "web"
     requires_key = None
+    detectability = "medium"  # HTTP GET to the target URL
     input_model = ScrapeUrlInput
     output_model = ScrapeUrlOutput
 
@@ -94,7 +96,7 @@ async def _crawl4ai(url: str, ctx: PluginContext) -> ScrapeUrlOutput | None:  # 
         source="scrape_url", backend="crawl4ai", title=title, text=text, links=[], images=[]
     )
     out.summary_markdown = _summary(url, out)
-    out.entities = _entities(text)
+    out.entities = _entities(text, source_url=url)
     return out
 
 
@@ -129,7 +131,7 @@ async def _static(http: httpx.AsyncClient, url: str, ctx: PluginContext) -> Scra
         images=images[:50],
     )
     out.summary_markdown = _summary(url, out)
-    out.entities = _entities(text + "\n" + "\n".join(links))
+    out.entities = _entities(text + "\n" + "\n".join(links), source_url=url)
     return out
 
 
@@ -152,7 +154,7 @@ def _summary(url: str, out: ScrapeUrlOutput) -> str:
     return "\n".join(lines)
 
 
-def _entities(text: str) -> list[Entity]:
+def _entities(text: str, *, source_url: str | None = None) -> list[Entity]:
     seen: set[tuple[str, str]] = set()
     ents: list[Entity] = []
     for ex in extract_entities(text):
@@ -160,5 +162,12 @@ def _entities(text: str) -> list[Entity]:
         if key in seen:
             continue
         seen.add(key)
-        ents.append(Entity(type=ex.type, value=ex.value))
+        ents.append(
+            Entity(
+                type=ex.type,
+                value=ex.value,
+                confidence=Confidence.TENTATIVE,
+                provenance=Provenance(tool="scrape_url", source_url=source_url),
+            )
+        )
     return ents
