@@ -42,3 +42,34 @@ async def test_plugin_run_emits_dorks_urls_entities():
     assert ("username", "janedoe") in tv
     assert ("person", "janedoe") in tv
     assert "janedoe" in out.summary_markdown
+
+
+def test_build_dorks_category_files_targets_domain():
+    dorks = _build_dorks("example.com", site_dorks=False, extra="", category="files")
+    blob = "\n".join(dorks)
+    assert "site:example.com filetype:pdf" in blob
+    assert "site:example.com filetype:csv" in blob
+    assert all("example.com" in d for d in dorks)
+
+
+def test_build_dorks_category_all_covers_many_categories():
+    dorks = _build_dorks("example.com", site_dorks=False, extra="", category="all")
+    blob = "\n".join(dorks)
+    # at least one dork from several distinct categories
+    assert "filetype:pdf" in blob  # files
+    assert "inurl:admin" in blob  # admin
+    assert "api_key" in blob  # secrets
+    assert "ext:bak" in blob  # backups
+    assert len(dorks) >= 30  # the corpus is broad
+    assert len(dorks) == len(set(dorks))  # deduped
+
+
+async def test_plugin_run_category_secrets():
+    out = await GenerateDorksPlugin().run(
+        GenerateDorksInput(target="example.com", category="secrets"),
+        PluginContext(http=None),
+    )
+    blob = "\n".join(out.dorks)
+    assert "api_key" in blob
+    assert "example.com" in blob
+    assert "category: secrets" in out.summary_markdown

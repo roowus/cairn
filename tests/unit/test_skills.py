@@ -15,6 +15,36 @@ def test_discovers_builtin_skills():
         assert s.body.strip()
 
 
+def test_discovers_tradecraft_skills():
+    # Claude-OSINT-derived playbooks (P5).
+    tradecraft = {
+        "recon-methodology",
+        "secrets-hunting",
+        "web-attack-surface",
+        "cloud-k8s-surface",
+        "identity-fabric-sso",
+        "email-security",
+        "cdn-origin-discovery",
+        "vuln-prioritization",
+    }
+    skills = discover_skills()
+    assert tradecraft <= set(skills), tradecraft - set(skills)
+
+
+def test_tradecraft_skills_are_sized_and_attributed():
+    # A skill's whole body is injected into one turn, so it must stay bounded,
+    # and MIT-derived content must carry attribution.
+    skills = discover_skills()
+    for name in (
+        "recon-methodology", "secrets-hunting", "web-attack-surface",
+        "cloud-k8s-surface", "identity-fabric-sso", "email-security",
+        "cdn-origin-discovery", "vuln-prioritization",
+    ):
+        body = skills[name].body
+        assert len(body.splitlines()) <= 320, f"{name} too long to inject whole"
+        assert "Claude-OSINT" in body, f"{name} missing MIT attribution"
+
+
 def test_render_turn_prepends_playbook():
     s = Skill(name="x", description="d", usage="/x <t>", body="# Playbook\nDo the thing.")
     out = render_turn(s, "example.com")

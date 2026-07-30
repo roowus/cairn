@@ -41,6 +41,7 @@ class UsernameCheckPlugin(BasePlugin[UsernameCheckInput, UsernameCheckOutput]):
     name = "username_check"
     category = "identity"
     requires_key = None
+    detectability = "medium"  # first-party HTTP presence probes touch platforms
     input_model = UsernameCheckInput
     output_model = UsernameCheckOutput
 

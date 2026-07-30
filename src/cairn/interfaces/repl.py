@@ -158,16 +158,18 @@ def _cmd_workspace(console: Console, session: object) -> None:
 def _cmd_plugins(console: Console, session: object) -> None:
     from cairn.execution.base import plugin_status, plugin_tier
 
-    table = Table(title="Plugins (tier · brain status)", show_header=True, header_style="bold")
+    table = Table(title="Plugins (tier · detect · status)", show_header=True, header_style="bold")
     table.add_column("name", style="cyan")
     table.add_column("category", style="green")
     table.add_column("tier", style="yellow")
+    table.add_column("detect", style="red")
     table.add_column("status", style="magenta")
     for p in sorted(session.registry.all(), key=lambda x: x.name):  # type: ignore[attr-defined]
         table.add_row(
             p.name,
             p.category,
             plugin_tier(p),
+            p.detectability,
             plugin_status(p, session.ctx),  # type: ignore[attr-defined]
         )
     console.print(table)

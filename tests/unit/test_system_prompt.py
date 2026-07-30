@@ -56,3 +56,16 @@ def test_output_section_present():
     p = build_system_prompt(_settings("investigate"))
     assert "# Output" in p
     assert "Next steps" in p
+
+
+def test_evidence_and_opsec_sections_present_in_both_modes():
+    # Confidence (P4), detectability (P3), severity, scope — always on.
+    for mode in ("investigate", "challenge"):
+        p = build_system_prompt(_settings(mode))
+        assert "# Confidence & evidence" in p
+        assert {"TENTATIVE", "FIRM", "CONFIRMED"} <= set(p.split())
+        assert "rule of three" in p.lower()
+        assert "# Detectability & OPSEC" in p
+        assert "PASSIVE BY DEFAULT" in p
+        assert "# Severity" in p
+        assert "# Scope" in p

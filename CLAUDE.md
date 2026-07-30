@@ -27,6 +27,14 @@ commands, plugin-authoring, and the rules below in more detail.
    `run_shell` install tool for the model.
 6. **Honesty about containment.** "Auto-allow in workspace" is a *policy* boundary,
    not OS-enforced containment. Never claim airtight sandboxing.
+7. **Evidence-grade disciplines (the strategy moats).** Provenance, confidence,
+   severity, detectability, and typed-asset keys are first-class — see
+   [docs/architecture/evidence-model.md](docs/architecture/evidence-model.md). New
+   tools should tag `detectability` (low/medium/high) and emit `confidence`/
+   `provenance` on mined entities. Tradecraft skills (`skills/builtins/*.md`) are
+   MIT-derived from Claude-OSINT: keep the attribution line, keep active/offensive
+   techniques gated behind `CAIRN_MODE=challenge` + explicit authorization, and
+   keep paid platforms excluded.
 
 ## Working rules (apply on every change)
 

@@ -67,6 +67,13 @@ are rate/quality boosts.
 | `web_search` | 🆓 / 🔑 | query | Live search. **Reliable path = Brave** (`CAIRN_BRAVE_KEY`, free 2k/mo). No-key fallback is DuckDuckGo, which increasingly returns an anti-bot 202 page — when blocked, the tool returns no results *with an actionable Brave message* (never silent, never fabricated). |
 | `wayback_fetch` | 🆓 | URL | Fetch an archived snapshot's body from the Wayback Machine (`timestamp` optional). Archived URL in summary/entities is userinfo-redacted (including nested playback forms). |
 | `common_crawl` | 🆓 | domain/URL | Common Crawl index matches. Bare domains normalize to `host/*`; HTTP errors vs empty results are distinguished. |
+| `h1_reference` | 🆓 | keyword | HackerOne Hacktivity disclosed-reports reference (keyless GraphQL). Rank by top-voted (validated techniques) or top-bounty; returns title/severity/bounty/url per report. For tradecraft / vuln-prioritization research. |
+
+## Forensics / secrets
+
+| Plugin | Cost | `target` | Purpose |
+|---|---|---|---|
+| `secret_scan` | 🆓 | path | 48-pattern secret/credential scanner (AWS/GitHub/Stripe/Slack/AI APIs/private keys/…). Scans a workspace file/dir; findings become typed `secret` entities with `Severity` + provenance (tool + file + file SHA-256). Pure stdlib. For challenge/forensics artifacts; results are untrusted (wrapped). |
 
 **Reality check (2026):** free no-key web search is blocked by anti-bot on
 DuckDuckGo / Google / Bing, and SearXNG public instances are unreliable. Jina

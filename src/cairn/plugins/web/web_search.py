@@ -29,6 +29,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 
 from cairn.core.entities import extract_entities
+from cairn.core.provenance import Confidence, Provenance
 from cairn.execution.base import (
     BasePlugin,
     CostSpec,
@@ -195,5 +196,12 @@ def _entities(results: list[SearchResult]) -> list[Entity]:
         if key in seen:
             continue
         seen.add(key)
-        ents.append(Entity(type=ex.type, value=ex.value))
+        ents.append(
+            Entity(
+                type=ex.type,
+                value=ex.value,
+                confidence=Confidence.TENTATIVE,
+                provenance=Provenance(tool="web_search"),
+            )
+        )
     return ents

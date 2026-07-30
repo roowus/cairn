@@ -53,6 +53,7 @@ class DownloadUrlPlugin(BasePlugin[DownloadUrlInput, DownloadUrlOutput]):
     name = "download_url"
     category = "agentic"
     requires_key = None
+    detectability = "medium"  # HTTP GET to fetch bytes touches the host
     input_model = DownloadUrlInput
     output_model = DownloadUrlOutput
 

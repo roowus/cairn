@@ -61,6 +61,10 @@ class CliToolSpec:
     install_hint: str = ""  # shown for system tools (brew/apt/gem …)
     # True → auto-installed at session start (repl bootstrap). False → on demand.
     bootstrap: bool = True
+    # OPSEC detectability of the tool itself (mirrors BasePlugin.detectability,
+    # moat Pillar 3): "low" passive / "medium" targeted / "high" active scanning.
+    # Default "low"; nmap etc. override to "high".
+    detectability: str = "low"
 
     @property
     def install_args(self) -> list[str]:
@@ -78,12 +82,14 @@ _TOOLS: tuple[CliToolSpec, ...] = (
         uv_package="sherlock-project",
         description="Username → 300+ social profile URLs",
         aliases=("sherlock-project",),
+        detectability="medium",
     ),
     CliToolSpec(
         name="holehe",
         binary="holehe",
         uv_package="holehe",
         description="Email → registered platforms",
+        detectability="medium",
     ),
     # --- Tier A: forensic analyzers (uv, on demand) ---
     CliToolSpec(
@@ -151,6 +157,7 @@ _TOOLS: tuple[CliToolSpec, ...] = (
         description="Network/port discovery (authorized/owned hosts only)",
         manager="system",
         bootstrap=False,
+        detectability="high",
         install_hint="brew install nmap (macOS) or apt install nmap (Debian)",
     ),
     CliToolSpec(

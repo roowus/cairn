@@ -76,6 +76,7 @@ class SherlockPlugin(BasePlugin[SherlockInput, SherlockOutput]):
     name = "sherlock"
     category = "identity"
     requires_key = None
+    detectability = "medium"  # probes 300+ sites for the handle
     input_model = SherlockInput
     output_model = SherlockOutput
 
